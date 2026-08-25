@@ -13,7 +13,7 @@ import {
   type DoctrineRule,
   type RegulationAction,
 } from "./doctrine.ts";
-import { inspectLifecycleHook, type HookHost } from "./control.ts";
+import { inspectLifecycleHook, type ExternalHookHost, type HookHost } from "./control.ts";
 import { analyzeChange, signalState } from "./signal.ts";
 import { Unrunnable } from "./floor.ts";
 import { observeOrientation } from "./orient.ts";
@@ -289,7 +289,7 @@ export async function observeRegulation(
   const limitations: string[] = [];
 
   const host: HookHost = options.host ?? (process.env.CODEX_THREAD_ID ? "codex" : "claude");
-  const control = inspectLifecycleHook(cfg, host);
+  const control = inspectLifecycleHook(cfg, host as ExternalHookHost);
   if (!control.valid) {
     const errors = control.files.filter((file) => !file.valid)
       .map((file) => `${file.path}: ${file.error ?? "invalid settings"}`);

@@ -24,7 +24,7 @@ import { readJournal, readTrustedJournal, openSession, resolve, newSessionId } f
 import {
   canonicalLifecycleHookSettings, inspectLifecycleHook, setLifecycleHook,
   lifecycleHookScript, lifecycleRootMapping, resolveHookProjectRoot, LIFECYCLE_HOOK_EVENTS,
-  type HookHost, type LifecycleHookInspection, type LifecycleHookEvent,
+  type HookHost, type ExternalHookHost, type LifecycleHookInspection, type LifecycleHookEvent,
 } from "./control.ts";
 import { composeHookText, readHookText, HOOK_TEXT_DIR } from "./hook-text.ts";
 import { readDue, formatDue } from "./due.ts";
@@ -483,6 +483,11 @@ function readStdin(): Promise<string> {
   });
 }
 
+function externalHost(host: HookHost): ExternalHookHost {
+  if (host === "pi") throw new Error("Pi uses native lifecycle control");
+  return host;
+}
+
 export interface HookStatus {
   host: HookHost;
   control: LifecycleHookInspection;
@@ -631,7 +636,7 @@ export function currentObservation(cfg: Config, control: LifecycleHookInspection
 
 /** Structural configuration, historical memory, and this exact session stay separate. */
 export function hookStatus(cfg: Config, host: HookHost = "claude", session?: string | null): HookStatus {
-  const control = inspectLifecycleHook(cfg, host);
+  const control = inspectLifecycleHook(cfg, externalHost(host));
   const { records, sessions, unreadable } = readJournal(cfg);
   const opened = records.filter((r) => r.kind === "session");
   const entries = records.length - opened.length;
@@ -729,7 +734,7 @@ export function checkHooks(cfg: Config, json = false, host: HookHost = "claude",
 }
 
 export async function installHooks(cfg: Config, json = false, host: HookHost = "claude", session?: string | null): Promise<number> {
-  const result = await setLifecycleHook(cfg, true, host);
+  const result = await setLifecycleHook(cfg, true, externalHost(host));
   if (result.errors.length) {
     if (json) console.log(JSON.stringify({ errors: result.errors, control: result.inspection }, null, 2));
     else for (const error of result.errors) console.error(`cannot install lifecycle hook: ${error}`);
@@ -746,7 +751,7 @@ export async function installHooks(cfg: Config, json = false, host: HookHost = "
 }
 
 export async function uninstallHooks(cfg: Config, json = false, host: HookHost = "claude", session?: string | null): Promise<number> {
-  const result = await setLifecycleHook(cfg, false, host);
+  const result = await setLifecycleHook(cfg, false, externalHost(host));
   if (result.errors.length) {
     if (json) console.log(JSON.stringify({ errors: result.errors, control: result.inspection }, null, 2));
     else for (const error of result.errors) console.error(`cannot uninstall lifecycle hook: ${error}`);
@@ -811,13 +816,13 @@ SubagentStart/SessionStart).`);
 /** `coherence hooks` — print one host's canonical block, plus the
  *  instruction text so a reader can see what agents will actually be told. */
 export function printHooks(cfg: Config, host: HookHost = "claude"): void {
-  const block = canonicalLifecycleHookSettings(host);
-  const hostRoot = resolveHookProjectRoot(cfg, host);
+  const block = canonicalLifecycleHookSettings(externalHost(host));
+  const hostRoot = resolveHookProjectRoot(cfg, externalHost(host));
   const hostDir = host === "codex" ? ".codex" : ".claude";
   console.log(`Canonical ${host} control for ${hostRoot}. Prefer \`coherence hooks install --host ${host}\`; it preserves unrelated hooks.`);
   console.log("The settings value, stable launcher, and root mapping are:\n");
   console.log(JSON.stringify(block, null, 2));
-  console.log(`\n--- ${hostDir}/coherence-hook ---\n${lifecycleHookScript(host)}--- ${hostDir}/coherence-root ---\n${lifecycleRootMapping(cfg, host)}`);
+  console.log(`\n--- ${hostDir}/coherence-hook ---\n${lifecycleHookScript(externalHost(host))}--- ${hostDir}/coherence-root ---\n${lifecycleRootMapping(cfg, externalHost(host))}`);
   console.log(`
 SubagentStart / SessionStart inject the instruction below into the agent's context.
 PostToolUse records explicit file reads and writes for per-agent economy calibration; it
