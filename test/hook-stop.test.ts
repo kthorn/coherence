@@ -9,6 +9,7 @@ import { tmpProject, cleanup } from "./_helpers.ts";
 import { loadConfig } from "../src/config.ts";
 import { readCalibrationSamples } from "../src/calibration.ts";
 import { recordHookReads } from "../src/read-trace.ts";
+import { readActivity } from "../src/activity.ts";
 import { appendDecision, readJournal } from "../src/decisions.ts";
 import {
   hookStatus, reportHooks, prepareSessionStart, recordMainSettlement, prepareChildSettlement,
@@ -16,6 +17,17 @@ import {
 import { createWork, transitionWork } from "../src/work.ts";
 
 const HOOK_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "hook-cli.ts");
+
+test("runHook — non-tool lifecycle events append exactly one activity row", async () => {
+  const root = await tmpProject();
+  try {
+    const result = hook(root, "SessionStart", { session_id: "lifecycle-session" });
+    assert.equal(result.status, 0, result.stderr);
+    const rows = readActivity(await loadConfig(root), "lifecycle-session").rows;
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.event, "SessionStart");
+  } finally { await cleanup(root); }
+});
 
 test("shared lifecycle operations — native startup and settlements preserve evidence", async () => {
   const root = await tmpProject();

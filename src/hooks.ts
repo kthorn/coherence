@@ -327,6 +327,11 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     host, transport: hookTransport(), bundleHash: process.env.COHERENCE_HOOK_BUNDLE_FINGERPRINT ?? null,
   };
 
+  if (event !== "PostToolUse") {
+    try { recordActivity(cfg, event, payload, lifecycleContext(identity)); }
+    catch { /* observation loss must not become agent-lifecycle failure */ }
+  }
+
   if (event === "SubagentStart" || event === "SessionStart") {
     const text = await prepareSessionStart(cfg, event, identity);
     if (text) emit(identity.host, event, text);
