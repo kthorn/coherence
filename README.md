@@ -29,7 +29,7 @@ Install Coherence in this project and adopt its lifecycle control:
 2. Create coherence.config.json in the project root. An empty object {} is a
    complete config; add "typecheck", "test", and "testMatch" entries if the
    project has those commands.
-3. Run: npx coherence hooks install --host claude   (use --host codex on Codex)
+3. Run: npx coherence hooks install --host claude   (use --host codex on Codex, or pi on Pi)
 4. Commit coherence.config.json and the generated host control files.
 5. Run: npx coherence verify, then npx coherence orient, and report what they say.
 
@@ -51,7 +51,8 @@ outline and an agent map, and verifies that the docs/claims haven't rotted.
 ```sh
 npm install --save-dev @danilocampos/coherence
 printf '{}\n' > coherence.config.json       # declare the root — an empty config is complete, defaults do the rest
-npx coherence hooks install --host claude   # the lifecycle field: journal + instructions in every agent session
+npx coherence hooks install --host claude   # launcher host
+# Pi uses its native extension transport instead: npx coherence hooks install --host pi
 npx coherence verify                        # derive the graph and grade the claims
 ```
 
@@ -731,6 +732,7 @@ project-local dependency; no global installation is assumed.
    ```sh
    npx coherence hooks install --host claude
    npx coherence hooks install --host codex --session "$CODEX_THREAD_ID"
+   npx coherence hooks install --host pi
    ```
 
    `--host` is deliberately explicit: a bare command remains Claude for compatibility,
@@ -745,6 +747,9 @@ project-local dependency; no global installation is assumed.
    ```sh
    "$CLAUDE_PROJECT_DIR/.claude/coherence-hook" EVENT
    ```
+
+   Pi receives native in-process session, tool, and settlement events rather than a launcher.
+   Its optional `piProjectRoot` selects the project containing `.pi/settings.json`.
 
    Codex receives its own matchers and launcher identity:
 
@@ -770,6 +775,8 @@ project-local dependency; no global installation is assumed.
    - `.codex/coherence-hook`
    - `.codex/coherence-root`
 
+   Pi's committed control is `.pi/settings.json` and `.pi/coherence-root`.
+
    Also commit `coherence.config.json`. In a nested layout these files deliberately live
    at different levels: the config/package in the coherence root, the three control
    files in the host project root. `.claude/settings.local.json` is not part of Claude's
@@ -786,6 +793,7 @@ project-local dependency; no global installation is assumed.
    ```sh
    npx coherence hooks --check --host claude
    npx coherence hooks --check --host codex
+   npx coherence hooks --check --host pi
    # or use the corresponding host-specific package script above
    ```
 
@@ -795,7 +803,7 @@ project-local dependency; no global installation is assumed.
    legacy spelling, competing action, drifted launcher, misaligned Codex/Git root,
    excluded or disabled Codex project hooks, or missing target is OFF.
 
-5. **Activate and prove the current Codex session separately.** Installation cannot make
+5. **Activate and prove the current session separately.** Installation cannot make
    a hook fire retroactively. Review the exact project hook in Codex `/hooks`, then start
    or resume the session so `SessionStart` crosses the installed launcher. Inspect the
    same session by id:
@@ -803,10 +811,12 @@ project-local dependency; no global installation is assumed.
    ```sh
    npx coherence hooks status --host codex --session "$CODEX_THREAD_ID"
    npx coherence hooks --check --host codex --session "$CODEX_THREAD_ID"
+   npx coherence hooks status --host pi --session "$PI_SESSION_ID"
+   npx coherence hooks --check --host pi --session "$PI_SESSION_ID"
    ```
 
    With `--session`, `--check` requires both the structural bit and an event delivered by
-   the exact selected host, launcher transport, and installed bundle fingerprint. That
+   the exact selected host, canonical host transport, and installed bundle fingerprint. That
    fingerprint includes the hook-body protocol as well as settings and launcher bytes,
    so an event from an older wire contract cannot prove the new body ran. A manual
    `coherence hook` probe is reported as direct evidence, not activation; an older bundle
@@ -832,7 +842,9 @@ project-local dependency; no global installation is assumed.
    refuse closure. `none` is an attribution result, not proof of a zero failure rate:
    without current-bundle activation and a nonzero predeclared event denominator, hook
    reliability remains unmeasured. Likewise, a
-   `SubagentStop` without an exact child id reports the child journal count as unavailable
+   Pi optionally detects `pi-subagents` but does not require or import it. When
+   `PI_SUBAGENT_CHILD=1`, the exact child session is attributed and one extra child report
+   turn is guarded. `SubagentStop` without an exact child id reports the child journal count as unavailable
    and takes no child calibration snapshot; the repository-wide open-conjecture reminder
    remains explicitly repository-wide.
 
@@ -896,7 +908,9 @@ npx coherence doctrine                         # inspect the law being applied
 npx coherence regulate                         # current host (Codex when CODEX_THREAD_ID is set)
 npx coherence regulate --host claude
 npx coherence regulate --host codex --since origin/main
+npx coherence regulate --host pi
 npx coherence regulate --check --host codex
+npx coherence regulate --check --host pi
 npx coherence regulate --host codex --json
 ```
 
@@ -993,6 +1007,7 @@ defaults come from `src/config.ts`):
 | `claudeMdPath` | `"CLAUDE.md"` | Path to the CLAUDE.md whose fenced block `coherence claude` owns. May be `../`-relative to escape the coherence root (repo-root CLAUDE.md above a sub-package). |
 | `claudeProjectRoot` | `"."` | Path from the coherence root to the Claude project root whose `.claude/settings.json` owns lifecycle hooks. Set `".."` when coherence/package.json lives in a sub-project but Claude opens at the repository root. The installed launcher remains identical; `.claude/coherence-root` carries the relative address back. |
 | `codexProjectRoot` | `claudeProjectRoot`, then `"."` | Path from the coherence root to the Codex project root whose `.codex/hooks.json` owns lifecycle hooks. In a Git checkout this must resolve to `git rev-parse --show-toplevel`, because the canonical launcher is found from that root. The Codex and Claude controls remain independent even when their roots coincide. |
+| `piProjectRoot` | `"."` | Path from the coherence root to the Pi project root whose `.pi/settings.json` owns the native extension package entry and `.pi/coherence-root` mapping. Pi's native transport remains distinct from Claude/Codex launchers. |
 | `dictionary` | `"dictionary"` | Dir (relative to the coherence root) holding the pattern dictionary — one `<Word>.md` per word. A `conforms to <Word>` claim expands the word's commitments against the declaring component. A project with no such dir simply has no words (see "The dictionary" below). |
 | `sources` | `[entryDir]` | Dirs the `lint-sinks`/`conventions` scans are scoped to — keep generated/vendored trees out. |
 | `testDir` | `"__tests__"` | Path substring identifying test files for the ratchet scans. |

@@ -307,7 +307,7 @@ export async function observeRegulation(
       ? `${pi!.target.extensionPath || ".pi extension"}: Pi extension target is missing`
       : `${pi!.mapping.path}: Pi root mapping is missing or drifted` });
   } else if (host !== "pi" && !(control as ReturnType<typeof inspectLifecycleHook>).launcher.targetPresent) {
-    observations.push({ rule: "canonical-lifecycle-control", status: "unavailable", evidence: `${(control as ReturnType<typeof inspectLifecycleHook>).launcher.targetPath}: lifecycle target is missing; install this coherence version in the project first` });
+    observations.push({ rule: "canonical-lifecycle-control", status: "unavailable", evidence: (control as ReturnType<typeof inspectLifecycleHook>).launcher.targetPath + ": lifecycle target is missing; install this coherence version in the project first" });
   } else if (control.present) {
     observations.push({ rule: "canonical-lifecycle-control", status: "satisfied", evidence: host === "pi"
       ? "the native Pi package, root mapping, and extension target are present"
