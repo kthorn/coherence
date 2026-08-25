@@ -136,11 +136,16 @@ function repoPath(cfg: Config, p: string, mustExist: boolean): string | null {
 }
 
 /** PostToolUse write: tiny, append-only, and intentionally outside the committed record. */
-export function recordHookReads(cfg: Config, payload: unknown, now = new Date().toISOString()): ReadEvent[] {
+export function recordHookReads(
+  cfg: Config,
+  payload: unknown,
+  now = new Date().toISOString(),
+  context?: { host: ActivityHost; transport: ActivityTransport; bundleHash: string | null; experimentId: string | null },
+): ReadEvent[] {
   const { session, tool, mode, candidates } = hookPathCandidates(payload);
   const at = Number.isFinite(Date.parse(now)) ? new Date(now).toISOString() : now;
   const host = process.env.COHERENCE_HOOK_HOST;
-  const observed = activityRow("PostToolUse", payload, {
+  const observed = activityRow("PostToolUse", payload, context ?? {
     host: host === "claude" || host === "codex" ? host : "unknown",
     transport: process.env.COHERENCE_HOOK_TRANSPORT === "launcher" ? "launcher" : "direct",
     bundleHash: process.env.COHERENCE_HOOK_BUNDLE_FINGERPRINT ?? null,
@@ -174,7 +179,7 @@ export function recordHookReads(cfg: Config, payload: unknown, now = new Date().
   return events;
 }
 
-const HOSTS = new Set<string>(["claude", "codex", "unknown"]);
+const HOSTS = new Set<string>(["claude", "codex", "pi", "unknown"]);
 const ATTRIBUTIONS = new Set<string>(["agent", "session", "parent-fallback", "unknown"]);
 
 function nullableText(value: unknown): boolean {
@@ -186,7 +191,7 @@ function validObservation(value: unknown, session: string): value is ReadEventOb
   const row = value as Record<string, unknown>;
   const shape = row.version === 1
     && HOSTS.has(String(row.host))
-    && (row.transport === "launcher" || row.transport === "direct")
+    && (row.transport === "launcher" || row.transport === "native" || row.transport === "direct")
     && ATTRIBUTIONS.has(String(row.attribution))
     && nullableText(row.bundleHash)
     && nullableText(row.parentSession)

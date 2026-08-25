@@ -16,6 +16,24 @@ const launcher: ActivityContext = {
   host: "codex", transport: "launcher", bundleHash: "sha256:canonical", experimentId: "plan/v1",
 };
 
+test("Pi telemetry — native activity and path traces stay exact-session and strict", async () => {
+  const root = await tmpProject({ "src/a.ts": "export const a = 1;\n" });
+  try {
+    const c = cfg(root);
+    const context = { host: "pi", transport: "native", bundleHash: "pi-bundle", experimentId: null } as const;
+    const payload = {
+      session_id: "pi-session", agent_id: "pi-session", tool_use_id: "call-1",
+      tool_name: "Read", tool_input: { path: "src/a.ts" },
+    };
+    recordActivity(c, "PostToolUse", payload, context, "2026-08-24T00:00:00.000Z");
+    recordHookReads(c, payload, "2026-08-24T00:00:00.000Z", context);
+    assert.equal(readActivity(c, "pi-session").rows[0]?.transport, "native");
+    const { readTraceDetailed } = await import("../src/read-trace.ts");
+    assert.equal(readTraceDetailed(c, "pi-session").rows[0]?.observation?.host, "pi");
+    assert.equal(readTraceDetailed(c, "pi-session").rows[0]?.observation?.transport, "native");
+  } finally { await cleanup(root); }
+});
+
 test("activity — host metadata and exact agent attribution survive one row", () => {
   const row = activityRow("PostToolUse", {
     session_id: "parent-thread", agent_id: "agent-7", turn_id: "turn-2",

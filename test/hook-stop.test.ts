@@ -7,13 +7,36 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpProject, cleanup } from "./_helpers.ts";
 import { loadConfig } from "../src/config.ts";
-import { recordHookReads } from "../src/read-trace.ts";
 import { readCalibrationSamples } from "../src/calibration.ts";
+import { recordHookReads } from "../src/read-trace.ts";
 import { appendDecision, readJournal } from "../src/decisions.ts";
-import { hookStatus, reportHooks } from "../src/hooks.ts";
+import {
+  hookStatus, reportHooks, prepareSessionStart, recordMainSettlement, prepareChildSettlement,
+} from "../src/hooks.ts";
 import { createWork, transitionWork } from "../src/work.ts";
 
 const HOOK_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "hook-cli.ts");
+
+test("shared lifecycle operations — native startup and settlements preserve evidence", async () => {
+  const root = await tmpProject();
+  try {
+    const config = await loadConfig(root);
+    const text = await prepareSessionStart(config, "SessionStart", {
+      session: "pi-session", agent: "main", job: "pi-session",
+      host: "pi", transport: "native", bundleHash: "pi-bundle",
+    });
+    assert.match(text, /YOUR SESSION ID IS pi-session/);
+    recordHookReads(config, {
+      session_id: "pi-session", agent_id: "pi-session", tool_name: "Read",
+      tool_input: { path: "package.json" },
+    });
+    await recordMainSettlement(config, "pi-session");
+    const child = await prepareChildSettlement(config, "pi-child");
+    assert.match(child, /YOUR REPLY MUST RESTATE YOUR FINAL REPORT/);
+    assert.match(child, /CHANGE SIGNAL/);
+    assert.ok(readJournal(config).records.some((record) => record.kind === "session" && record.session === "pi-session"));
+  } finally { await cleanup(root); }
+});
 
 function git(root: string, ...args: string[]) {
   return spawnSync("git", args, { cwd: root, encoding: "utf8" });

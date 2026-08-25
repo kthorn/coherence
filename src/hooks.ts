@@ -31,9 +31,9 @@ import { readDue, formatDue } from "./due.ts";
 import {
   activityReplayKey, readActivity, recordActivity,
   type ActivityRow,
-  type ActivityHost, type ActivityTransport,
+  type ActivityHost, type ActivityTransport, type ActivityContext,
 } from "./activity.ts";
-import { readTraceDetailed } from "./read-trace.ts";
+import { readTraceDetailed, recordHookReads } from "./read-trace.ts";
 import { readExperiments } from "./experiment.ts";
 import type { Config } from "./types.ts";
 
@@ -236,11 +236,74 @@ export function composeStopFeedback(
 
 function hookHost(): ActivityHost {
   const host = process.env.COHERENCE_HOOK_HOST;
-  return host === "codex" || host === "claude" ? host : "unknown";
+  return host === "codex" || host === "claude" || host === "pi" ? host : "unknown";
 }
 
 function hookTransport(): ActivityTransport {
-  return process.env.COHERENCE_HOOK_TRANSPORT === "launcher" ? "launcher" : "direct";
+  return process.env.COHERENCE_HOOK_TRANSPORT === "launcher"
+    ? "launcher"
+    : process.env.COHERENCE_HOOK_TRANSPORT === "native" ? "native" : "direct";
+}
+
+export interface LifecycleIdentity {
+  session: string;
+  agent: string;
+  job: string;
+  host: ActivityHost;
+  transport: ActivityTransport;
+  bundleHash: string | null;
+}
+
+function lifecycleContext(identity: LifecycleIdentity): ActivityContext {
+  return { host: identity.host, transport: identity.transport, bundleHash: identity.bundleHash, experimentId: null };
+}
+
+export async function prepareSessionStart(
+  cfg: Config,
+  event: "SessionStart" | "SubagentStart",
+  identity: LifecycleIdentity,
+): Promise<string> {
+  let rec = { session: identity.session, agent: identity.agent };
+  let journalControl: string[] = [];
+  try {
+    const trusted = readTrustedJournal(cfg);
+    if (!trusted.ok) throw new Error(`${trusted.damage.length} decision journal damage item(s)`);
+    rec = trusted.records.find((r) => r.kind === "session" && r.session === identity.session)
+      ?? openSession(cfg, { session: identity.session, agent: identity.agent, job: identity.job });
+  } catch (error) {
+    journalControl = ["", `JOURNAL CONTROL unavailable: ${instructionValue(error instanceof Error ? error.message : String(error))}`];
+  }
+  const cli = projectCli(cfg);
+  const scope = `--session ${JSON.stringify(rec.session)}${rec.agent ? ` --agent ${JSON.stringify(rec.agent)}` : ""}`;
+  const [work, due] = await Promise.all([
+    assignedWorkInstructions(cfg, rec.session, cli, rec.agent),
+    readDue(cfg).then((r) => formatDue(r, cli, scope)).catch(() => []),
+  ]);
+  const canonical = [agentInstructions(rec.session, cli, rec.agent), ...journalControl, ...work, ...due].join("\n");
+  return composeHookText(canonical, readHookText(cfg, event), { session: rec.session, agent: rec.agent, cli, scope });
+}
+
+export function recordLifecycleToolResult(cfg: Config, payload: unknown, context: ActivityContext): void {
+  try { recordActivity(cfg, "PostToolUse", payload, context); } catch { /* telemetry is non-authoritative */ }
+  try { recordHookReads(cfg, payload, new Date().toISOString(), context); } catch { /* telemetry is non-authoritative */ }
+}
+
+export async function recordMainSettlement(cfg: Config, session: string): Promise<void> {
+  const { recordCalibrationSample } = await import("./calibration.ts");
+  await recordCalibrationSample(cfg, session);
+}
+
+export async function prepareChildSettlement(cfg: Config, session: string): Promise<string> {
+  const [{ analyzeChange, formatSignal }, { recordCalibrationSample }] = await Promise.all([
+    import("./signal.ts"), import("./calibration.ts"),
+  ]);
+  await recordCalibrationSample(cfg, session).catch(() => null);
+  const change: StopChangeFeedback = await analyzeChange(cfg).then((s) => ({
+    kind: "available" as const, text: formatSignal(s).join("\n"),
+  })).catch((e: unknown) => ({
+    kind: "unavailable" as const, text: `CHANGE SIGNAL unavailable: ${e instanceof Error ? e.message : String(e)}`,
+  }));
+  return composeStopFeedback("SubagentStop", stopReport(cfg, session), change) ?? "";
 }
 
 /** `coherence hook <event>` — the hook body itself, so nothing has to be written to
@@ -257,67 +320,16 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
   const hostScope = agentScope ?? sessionScope;
   const host = hookHost();
 
-  // Every lifecycle crossing leaves a cheap, transient heartbeat. Unlike a journal
-  // header, this names the host, launcher transport and exact bundle fingerprint, so an
-  // old Claude run—or a direct diagnostic invocation—cannot prove that THIS Codex
-  // session is currently inside the field.
-  try {
-    recordActivity(cfg, event, payload, {
-      host,
-      transport: hookTransport(),
-      bundleHash: process.env.COHERENCE_HOOK_BUNDLE_FINGERPRINT ?? null,
-      experimentId: null,
-    });
-  } catch { /* observation loss must not become agent-lifecycle failure */ }
+  const identity: LifecycleIdentity = {
+    session: String(hostScope ?? process.env.COHERENCE_SESSION ?? newSessionId()),
+    agent: String(p.agent_type ?? p.agentType ?? process.env.COHERENCE_AGENT ?? "main"),
+    job: String(p.session_id ?? p.sessionId ?? process.env.COHERENCE_JOB ?? "-"),
+    host, transport: hookTransport(), bundleHash: process.env.COHERENCE_HOOK_BUNDLE_FINGERPRINT ?? null,
+  };
 
   if (event === "SubagentStart" || event === "SessionStart") {
-    // The session is OPENED here, by the hook, once per agent — which is the only
-    // place that can guarantee one id per agent rather than one per shell command.
-    const session = hostScope === undefined ? newSessionId() : String(hostScope);
-    const agent = String(p.agent_type ?? p.agentType ?? process.env.COHERENCE_AGENT ?? "main");
-    let rec: { session: string; agent: string } = { session, agent };
-    let journalUnavailable: string | null = null;
-    // Codex re-fires SessionStart on resume, clear and compaction. Re-inject the current
-    // work order every time, but keep one logical journal opening for one host session.
-    try {
-      const trusted = readTrustedJournal(cfg);
-      if (!trusted.ok) throw new Error(`${trusted.damage.length} decision journal damage item(s)`);
-      const existing = trusted.records
-        .find((record) => record.kind === "session" && record.session === session);
-      rec = existing ?? openSession(cfg, {
-        session,
-        agent,
-        job: String(p.session_id ?? p.sessionId ?? process.env.COHERENCE_JOB ?? "-"),
-      });
-    } catch (error) {
-      journalUnavailable = instructionValue(error instanceof Error ? error.message : String(error));
-    }
-    // THE WORK ORDER IS COMPOSED HERE, not inside `agentInstructions`. That function is
-    // printed verbatim by `coherence hooks` and asserted byte-wise by its tests; making it
-    // read git and the run record would make a documentation command's output vary by
-    // repo state and by day — the hazard commands.ts spends a paragraph on ("no clock,
-    // nothing machine-specific, so `docs --check` compares byte-for-byte with zero
-    // normalization"). The pure block stays pure; the impure reading is appended.
-    //
-    // AND IT IS USUALLY EMPTY. `formatDue` returns [] when nothing is due, so this line is
-    // a no-op on a project that keeps its instruments current, and the emitted block is
-    // byte-identical to what it was before this shipped. A fourth imperative that fired
-    // every session would cost the other three their attention.
-    const cli = projectCli(cfg);
-    const scope = `--session ${JSON.stringify(rec.session)}${rec.agent ? ` --agent ${JSON.stringify(rec.agent)}` : ""}`;
-    // A hook that throws breaks every session in every adopting project on repin. This
-    // reading is worth strictly less than that, so it can fail to nothing.
-    const [work, due] = await Promise.all([
-      assignedWorkInstructions(cfg, rec.session, cli, rec.agent),
-      readDue(cfg).then((r) => formatDue(r, cli, scope)).catch(() => []),
-    ]);
-    const journalControl = journalUnavailable ? ["", `JOURNAL CONTROL unavailable: ${journalUnavailable}`] : [];
-    const canonical = [agentInstructions(rec.session, cli, rec.agent), ...journalControl, ...work, ...due].join("\n");
-    // The project's declared voice composes here — an override replaces the canon, an
-    // append follows it. An empty override is a deliberate silence, so a falsy text
-    // emits nothing at all.
-    const text = composeHookText(canonical, readHookText(cfg, event), { session: rec.session, agent: rec.agent, cli, scope });
-    if (text) emit(host, event, text);
+    const text = await prepareSessionStart(cfg, event, identity);
+    if (text) emit(identity.host, event, text);
     return 0;
   }
 
@@ -325,10 +337,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
   // and no attempt to reverse-engineer shell command strings. These transient rows are
   // what `calibrate` later compares with economy's predicted closure.
   if (event === "PostToolUse") {
-    try {
-      const { recordHookReads } = await import("./read-trace.ts");
-      recordHookReads(cfg, payload);
-    } catch { /* telemetry damage must not become agent-lifecycle failure */ }
+    recordLifecycleToolResult(cfg, payload, lifecycleContext(identity));
     // Deliberately dependency-light: with nothing declared on disk this is two stat
     // calls and out. The project voice is the only reason this event ever speaks.
     emitProjectVoice(cfg, host, event, hostScope);
@@ -346,8 +355,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     // its report. The one exception is a project-declared voice — an explicit project
     // choice, and one that still sits behind the stop_hook_active loop guard above.
     const session = String(hostScope ?? process.env.COHERENCE_SESSION ?? "unknown");
-    const { recordCalibrationSample } = await import("./calibration.ts");
-    await recordCalibrationSample(cfg, session).catch(() => null);
+    await recordMainSettlement(cfg, session).catch(() => null);
     emitProjectVoice(cfg, host, event, session);
     return 0;
   }
@@ -361,21 +369,15 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     // precision. In that case the hook still reports the repo-wide signal, but records no
     // child calibration and names the attribution ceiling in the report.
     const childSession = typeof agentScope === "string" && agentScope.length ? agentScope : null;
-    const [{ analyzeChange, formatSignal }, calibration] = await Promise.all([
-      import("./signal.ts"),
-      childSession ? import("./calibration.ts") : Promise.resolve(null),
-    ]);
-    if (childSession && calibration) {
-      await calibration.recordCalibrationSample(cfg, childSession).catch(() => null);
-    }
-    const change: StopChangeFeedback = await analyzeChange(cfg).then((s) => ({
-      kind: "available" as const,
-      text: formatSignal(s).join("\n"),
-    })).catch((e: unknown) => ({
-      kind: "unavailable" as const,
-      text: `CHANGE SIGNAL unavailable: ${e instanceof Error ? e.message : String(e)}`,
-    }));
-    const feedback = composeStopFeedback(event, stopReport(cfg, childSession), change);
+    const feedback = childSession
+      ? await prepareChildSettlement(cfg, childSession)
+      : composeStopFeedback(event, stopReport(cfg, childSession), await import("./signal.ts").then(async ({ analyzeChange, formatSignal }) => ({
+        kind: "available" as const,
+        text: formatSignal(await analyzeChange(cfg)).join("\n"),
+      })).catch((e: unknown) => ({
+        kind: "unavailable" as const,
+        text: `CHANGE SIGNAL unavailable: ${e instanceof Error ? e.message : String(e)}`,
+      })));
     // The project's declared voice composes over the canonical report — override
     // replaces, append follows, and an empty override silences even this surface.
     const text = composeHookText(feedback ?? "", readHookText(cfg, event), {
