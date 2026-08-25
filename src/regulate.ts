@@ -289,6 +289,7 @@ export async function observeRegulation(
   const limitations: string[] = [];
 
   const host: HookHost = options.host ?? (process.env.CODEX_THREAD_ID ? "codex" : "claude");
+  if (host === "pi") throw new Error("Pi uses native lifecycle control; external lifecycle regulation refuses Pi");
   const control = inspectLifecycleHook(cfg, host as ExternalHookHost);
   if (!control.valid) {
     const errors = control.files.filter((file) => !file.valid)

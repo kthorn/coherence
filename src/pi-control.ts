@@ -103,6 +103,7 @@ export async function setPiLifecycleHook(cfg: Config, present: boolean): Promise
   const packages = read.value.packages === undefined ? [] : read.value.packages;
   if (!Array.isArray(packages)) return { inspection: before, changed, errors: [`${read.path}: packages must be an array`] };
   const entry = canonicalEntry(cfg), managed = packages.filter((value) => managedEntry(value, cfg, extension));
+  if (managed.length > 1) return { inspection: before, changed, errors: ["Pi settings contain ambiguous duplicate managed entries"] };
   const next = structuredClone(read.value);
   if (present) {
     if (!packages.includes(entry)) next.packages = [...packages, entry];
@@ -125,7 +126,8 @@ export function resolvePiRuntimeRoot(cwd: string, extensionPath: string): { acti
     if (existsSync(map)) {
       const rel = readFileSync(map, "utf8"); if (!rel.endsWith("\n") || rel.slice(0, -1).includes("\n")) return { active: false, reason: "invalid Pi coherence mapping" };
       const root = resolve(dir, rel.trim());
-      const target = manifestExtension(root); if (target && resolve(extensionPath) === target) return { active: true, root };
+      const target = packageManifest(root)?.name === PI_EXTENSION_ID ? manifestExtension(root) : null;
+      if (target && resolve(extensionPath) === target) return { active: true, root };
       return { active: false, reason: "extension is not the mapped coherence package" };
     }
     const parent = dirname(dir); if (parent === dir) break; dir = parent;

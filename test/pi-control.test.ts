@@ -68,3 +68,28 @@ test("Pi control — runtime activates only the mapped extension", async () => {
   assert.deepEqual(resolvePiRuntimeRoot(join(host, "nested"), extension), { active: true, root });
   assert.equal(resolvePiRuntimeRoot(join(host, "nested"), join(root, "other.js")).active, false);
 });
+
+test("Pi control — duplicate managed entries refuse installation", async () => {
+  const host = await tmpProject();
+  const root = join(host, "app");
+  await mkdir(join(root, "dist"), { recursive: true });
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "@danilocampos/coherence", pi: { extensions: ["./dist/pi-extension.js"] } }));
+  await writeFile(join(root, "dist/pi-extension.js"), "x");
+  await mkdir(join(host, ".pi"), { recursive: true });
+  await writeFile(join(host, ".pi/settings.json"), JSON.stringify({ packages: ["../app", "../app"] }));
+  const result = await setPiLifecycleHook(cfg(root, { piProjectRoot: ".." }), true);
+  assert.match(result.errors.join("\n"), /ambiguous|duplicate/i);
+  assert.deepEqual(result.changed, []);
+});
+
+test("Pi control — runtime rejects a foreign mapped package", async () => {
+  const host = await tmpProject();
+  const root = join(host, "foreign");
+  await mkdir(join(root, "dist"), { recursive: true });
+  const extension = join(root, "dist/pi-extension.js");
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "foreign-package", pi: { extensions: ["./dist/pi-extension.js"] } }));
+  await writeFile(extension, "x");
+  await mkdir(join(host, ".pi"), { recursive: true });
+  await writeFile(join(host, ".pi/coherence-root"), "foreign\n");
+  assert.equal(resolvePiRuntimeRoot(host, extension).active, false);
+});

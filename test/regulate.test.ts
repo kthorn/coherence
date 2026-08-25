@@ -356,3 +356,10 @@ test("regulate — completed work requires an explicit verification link before 
     assert.equal(linked.action, "release");
   } finally { await cleanup(root); }
 });
+
+test("regulate — Pi is refused at the external lifecycle boundary", async () => {
+  const root = await tmpProject();
+  try {
+    await assert.rejects(() => observeRegulation(cfg(root), undefined, { host: "pi" }), /native Pi lifecycle control|external/i);
+  } finally { await cleanup(root); }
+});
