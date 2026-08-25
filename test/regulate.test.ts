@@ -10,6 +10,7 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { commandFor } from "../src/commands.ts";
 import { setLifecycleHook } from "../src/control.ts";
+import { setPiLifecycleHook } from "../src/pi-control.ts";
 import {
   ANTI_ENTROPY_DOCTRINE,
   type DoctrineRule,
@@ -357,9 +358,22 @@ test("regulate — completed work requires an explicit verification link before 
   } finally { await cleanup(root); }
 });
 
-test("regulate — Pi is refused at the external lifecycle boundary", async () => {
-  const root = await tmpProject();
+test("regulate — selected Pi host cannot be redeemed by Claude or Codex control", async () => {
+  const root = await tmpProject({ "coherence.config.json": "{}\n" });
   try {
-    await assert.rejects(() => observeRegulation(cfg(root), undefined, { host: "pi" }), /native Pi lifecycle control|external/i);
+    const git = (...args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    git("add", ".");
+    git("commit", "-q", "-m", "base");
+    const config = cfg(root);
+    await setLifecycleHook(config, true, "claude");
+    const absentPi = selectRegulation(await observeRegulation(config, undefined, { host: "pi" }));
+    assert.equal(absentPi.action, "redirect");
+    assert.deepEqual(absentPi.selected?.command, { name: "hooks", args: ["install", "--host", "pi"] });
+    await setPiLifecycleHook(config, true);
+    const completePi = selectRegulation(await observeRegulation(config, undefined, { host: "pi" }));
+    assert.equal(completePi.action, "release");
   } finally { await cleanup(root); }
 });

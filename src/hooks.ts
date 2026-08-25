@@ -26,6 +26,7 @@ import {
   lifecycleHookScript, lifecycleRootMapping, resolveHookProjectRoot, LIFECYCLE_HOOK_EVENTS,
   type HookHost, type ExternalHookHost, type LifecycleHookInspection, type LifecycleHookEvent,
 } from "./control.ts";
+import { inspectPiLifecycleHook, setPiLifecycleHook, resolvePiProjectRoot, type PiLifecycleInspection } from "./pi-control.ts";
 import { composeHookText, readHookText, HOOK_TEXT_DIR } from "./hook-text.ts";
 import { readDue, formatDue } from "./due.ts";
 import {
@@ -495,16 +496,37 @@ function externalHost(host: HookHost): ExternalHookHost {
   return host;
 }
 
+const controlFor = (cfg: Config, host: HookHost): LifecycleHookInspection | PiLifecycleInspection =>
+  host === "pi" ? inspectPiLifecycleHook(cfg) : inspectLifecycleHook(cfg, externalHost(host));
+const mutateControl = (cfg: Config, host: HookHost, present: boolean) =>
+  host === "pi" ? setPiLifecycleHook(cfg, present) : setLifecycleHook(cfg, present, externalHost(host));
+
 export interface HookStatus {
   host: HookHost;
-  control: LifecycleHookInspection;
+  control: LifecycleHookInspection | PiLifecycleInspection;
   observation: {
     journalSessionHeaders: number;
     journalEntries: number;
     sessions: number;
     unreadableJournal: number;
-    current: CurrentHookObservation | null;
+    current: CurrentHookObservation | CurrentPiHookObservation | null;
   };
+}
+
+export interface CurrentPiHookObservation {
+  session: string;
+  state: "observed" | "unobserved" | "stale";
+  exactNativeEvents: number;
+  staleNativeEvents: number;
+  directEvents: number;
+  lastExactAt: string | null;
+  trace: Omit<CurrentHookObservation["trace"], "bundle"> & { bundle: { exactNative: number; staleNative: number; direct: number; legacy: number } };
+  updatePlanEvents: number;
+  parentFallbackEvents: number;
+  unreadableActivity: number;
+  verification: { total: number; success: number; failure: number; unknown: number };
+  intervention: { total: number; success: number; failure: number; unknown: number };
+  experiment: CurrentHookObservation["experiment"];
 }
 
 export interface CurrentHookObservation {
@@ -541,6 +563,7 @@ export function activeHookHost(explicit?: HookHost | null): HookHost {
 export function activeHookSession(host: HookHost, explicit?: string | null): string | null {
   const selected = explicit ?? process.env.COHERENCE_SESSION
     ?? (host === "codex" ? process.env.CODEX_THREAD_ID : undefined)
+    ?? (host === "pi" ? process.env.PI_SESSION_ID : undefined)
     ?? null;
   return selected?.trim() ? selected : null;
 }
@@ -642,8 +665,37 @@ export function currentObservation(cfg: Config, control: LifecycleHookInspection
 }
 
 /** Structural configuration, historical memory, and this exact session stay separate. */
+export function currentPiObservation(cfg: Config, control: PiLifecycleInspection, session: string): CurrentPiHookObservation {
+  const activityRead = readActivity(cfg, session);
+  const activity = uniqueActivity(activityRead.rows);
+  const exact = activity.filter((row) => row.transport === "native" && row.host === "pi" && row.bundleHash === control.bundleFingerprint);
+  const stale = activity.filter((row) => row.transport === "native" && (row.host !== "pi" || row.bundleHash !== control.bundleFingerprint));
+  const direct = activity.filter((row) => row.transport === "direct");
+  const traceRead = readTraceDetailed(cfg, session), trace = traceRead.rows;
+  const scope = { ownerSession: 0, parentSessionAggregate: 0, unscoped: 0 };
+  const bundle = { exactNative: 0, staleNative: 0, direct: 0, legacy: 0 };
+  for (const row of trace) {
+    const observed = row.observation;
+    if (!observed) { scope.unscoped++; bundle.legacy++; continue; }
+    if ((observed.attribution === "agent" && observed.agentId === row.session) || (observed.attribution === "session" && observed.agentId === null && observed.parentSession === null)) scope.ownerSession++;
+    else if (observed.attribution === "parent-fallback" && observed.agentId === null && observed.parentSession === row.session) scope.parentSessionAggregate++;
+    else scope.unscoped++;
+    if (observed.transport === "direct") bundle.direct++;
+    else if (observed.host === "pi" && observed.transport === "native" && observed.bundleHash === control.bundleFingerprint) bundle.exactNative++;
+    else bundle.staleNative++;
+  }
+  let experiment: CurrentPiHookObservation["experiment"];
+  try {
+    const owned = readExperiments(cfg).experiments.filter((item) => item.opened.session === session), latest = owned.at(-1);
+    experiment = { open: owned.filter((item) => !item.closed).length, closed: owned.filter((item) => !!item.closed).length, latest: latest?.opened.id ?? null, outcome: latest?.closed?.outcome ?? null };
+  } catch (error) { experiment = { unavailable: error instanceof Error ? error.message : String(error) }; }
+  return { session, state: exact.length ? "observed" : stale.length ? "stale" : "unobserved", exactNativeEvents: exact.length, staleNativeEvents: stale.length, directEvents: direct.length, lastExactAt: exact.at(-1)?.at ?? null,
+    trace: { reads: trace.filter((row) => row.mode === "read").length, writes: trace.filter((row) => row.mode === "write").length, attribution: scope.unscoped ? "unscoped" : scope.parentSessionAggregate ? "parent-session-aggregate" : trace.length ? "owner-session" : "none", scope, bundle, unreadable: traceRead.unreadable },
+    updatePlanEvents: exact.filter((row) => row.event === "PostToolUse" && row.tool === "update_plan").length, parentFallbackEvents: exact.filter((row) => row.attribution === "parent-fallback").length, unreadableActivity: activityRead.unreadable, verification: commandCounts(exact, "verification"), intervention: commandCounts(exact, "intervention"), experiment };
+}
+
 export function hookStatus(cfg: Config, host: HookHost = "claude", session?: string | null): HookStatus {
-  const control = inspectLifecycleHook(cfg, externalHost(host));
+  const control = controlFor(cfg, host);
   const { records, sessions, unreadable } = readJournal(cfg);
   const opened = records.filter((r) => r.kind === "session");
   const entries = records.length - opened.length;
@@ -656,7 +708,9 @@ export function hookStatus(cfg: Config, host: HookHost = "claude", session?: str
       journalEntries: entries,
       sessions: sessions.length,
       unreadableJournal: unreadable,
-      current: currentSession ? currentObservation(cfg, control, currentSession) : null,
+      current: currentSession ? (host === "pi"
+      ? currentPiObservation(cfg, control as PiLifecycleInspection, currentSession)
+      : currentObservation(cfg, control as LifecycleHookInspection, currentSession)) : null,
     },
   };
 }
@@ -666,20 +720,28 @@ function printHookStatus(status: HookStatus, json = false): void {
   const { control, observation } = status;
   console.log(`host: ${status.host}`);
   console.log(`lifecycle hook: ${!control.valid ? "UNKNOWN" : control.present ? "PRESENT" : "ABSENT"}`);
-  console.log(`shared wiring: ${control.wiringPresent ? "PRESENT" : "ABSENT"}`);
-  if (control.scopes.length) console.log(`canonical scope(s): ${control.scopes.join(" + ")}`);
-  for (const file of control.files) {
-    if (!file.exists) console.log(`${file.scope}: no settings file`);
-    else if (!file.valid) console.log(`${file.scope}: INVALID — ${file.error ?? "unreadable settings"}`);
-    else if (file.complete) console.log(`${file.scope}: canonical five-event bundle present`);
-    else if (file.missingEvents.length) console.log(`${file.scope}: INCOMPLETE — missing ${file.missingEvents.join(", ")}`);
-    else if (file.matchedEvents.length) console.log(`${file.scope}: NONCANONICAL — duplicate or competing coherence actions`);
-    else console.log(`${file.scope}: canonical bundle absent`);
+  if (status.host === "pi") {
+    const pi = control as PiLifecycleInspection;
+    console.log(`native package: ${pi.settings.managedEntries === 1 ? "READY" : "NOT READY"}`);
+    console.log(`root mapping: ${pi.mapping.present ? "PRESENT" : "ABSENT"}`);
+    console.log(`extension target: ${pi.target.present ? "READY" : "MISSING"} (${pi.target.extensionPath})`);
+  } else {
+    const external = control as LifecycleHookInspection;
+    console.log(`shared wiring: ${external.wiringPresent ? "PRESENT" : "ABSENT"}`);
+    if (external.scopes.length) console.log(`canonical scope(s): ${external.scopes.join(" + ")}`);
+    for (const file of external.files) {
+      if (!file.exists) console.log(`${file.scope}: no settings file`);
+      else if (!file.valid) console.log(`${file.scope}: INVALID — ${file.error ?? "unreadable settings"}`);
+      else if (file.complete) console.log(`${file.scope}: canonical five-event bundle present`);
+      else if (file.missingEvents.length) console.log(`${file.scope}: INCOMPLETE — missing ${file.missingEvents.join(", ")}`);
+      else if (file.matchedEvents.length) console.log(`${file.scope}: NONCANONICAL — duplicate or competing coherence actions`);
+      else console.log(`${file.scope}: canonical bundle absent`);
+    }
   }
-  console.log(`launcher: ${control.launcher.present ? "READY" : "NOT READY"} (${control.launcher.path})`);
-  if (!control.launcher.canonical) console.log(`  script: ${control.launcher.exists ? "DRIFTED" : "MISSING"}`);
-  if (!control.launcher.mappingPresent) console.log(`  root mapping: ${control.launcher.mappingActual === undefined ? "MISSING" : "DRIFTED"} (expected ${control.launcher.mappingExpected})`);
-  console.log(`  target: ${control.launcher.targetPresent ? control.launcher.targetKind.toUpperCase() : "MISSING"} (${control.launcher.targetPath})`);
+  if (status.host !== "pi") console.log(`launcher: ${(control as LifecycleHookInspection).launcher.present ? "READY" : "NOT READY"} (${(control as LifecycleHookInspection).launcher.path})`);
+  if (status.host !== "pi" && !(control as LifecycleHookInspection).launcher.canonical) console.log(`  script: ${(control as LifecycleHookInspection).launcher.exists ? "DRIFTED" : "MISSING"}`);
+  if (status.host !== "pi" && !(control as LifecycleHookInspection).launcher.mappingPresent) console.log(`  root mapping: ${(control as LifecycleHookInspection).launcher.mappingActual === undefined ? "MISSING" : "DRIFTED"} (expected ${(control as LifecycleHookInspection).launcher.mappingExpected})`);
+  if (status.host !== "pi") console.log(`  target: ${(control as LifecycleHookInspection).launcher.targetPresent ? (control as LifecycleHookInspection).launcher.targetKind.toUpperCase() : "MISSING"} (${(control as LifecycleHookInspection).launcher.targetPath})`);
   console.log(`repository journal history: ${observation.journalEntries} entr${observation.journalEntries === 1 ? "y" : "ies"}`
     + ` across ${observation.sessions} session(s) · ${observation.journalSessionHeaders} session header(s)`
     + " — durable history, not proof this host or bundle ran");
@@ -691,17 +753,29 @@ function printHookStatus(status: HookStatus, json = false): void {
   } else {
     const current = observation.current;
     console.log(`current session: ${current.state.toUpperCase()} — ${current.session}`);
-    console.log(`  exact launcher/bundle events: ${current.exactLauncherEvents}`
-      + `${current.staleLauncherEvents ? ` · stale/other bundle: ${current.staleLauncherEvents}` : ""}`
-      + `${current.directEvents ? ` · direct probes: ${current.directEvents}` : ""}`);
+    if (status.host === "pi") {
+      const pi = current as CurrentPiHookObservation;
+      console.log(`  exact native/bundle events: ${pi.exactNativeEvents}`
+        + `${pi.staleNativeEvents ? ` · stale/other bundle: ${pi.staleNativeEvents}` : ""}`
+        + `${pi.directEvents ? ` · direct probes: ${pi.directEvents}` : ""}`);
+    } else {
+      const external = current as CurrentHookObservation;
+      console.log(`  exact launcher/bundle events: ${external.exactLauncherEvents}`
+        + `${external.staleLauncherEvents ? ` · stale/other bundle: ${external.staleLauncherEvents}` : ""}`
+        + `${external.directEvents ? ` · direct probes: ${external.directEvents}` : ""}`);
+    }
     console.log(`  path trace (session file): ${current.trace.reads} read · ${current.trace.writes} write`
       + ` — ${current.trace.attribution}`);
     console.log(`    scope: ${current.trace.scope.ownerSession} owner-session ·`
       + ` ${current.trace.scope.parentSessionAggregate} parent-session aggregate ·`
       + ` ${current.trace.scope.unscoped} unscoped`);
-    console.log(`    bundle: ${current.trace.bundle.exactLauncher} exact launcher/bundle ·`
-      + ` ${current.trace.bundle.staleLauncher} stale/other launcher ·`
-      + ` ${current.trace.bundle.direct} direct · ${current.trace.bundle.legacy} legacy`);
+    if (status.host === "pi") {
+      const bundle = (current as CurrentPiHookObservation).trace.bundle;
+      console.log(`    bundle: ${bundle.exactNative} exact native/bundle · ${bundle.staleNative} stale/other native · ${bundle.direct} direct · ${bundle.legacy} legacy`);
+    } else {
+      const bundle = (current as CurrentHookObservation).trace.bundle;
+      console.log(`    bundle: ${bundle.exactLauncher} exact launcher/bundle · ${bundle.staleLauncher} stale/other launcher · ${bundle.direct} direct · ${bundle.legacy} legacy`);
+    }
     if (current.trace.unreadable) {
       console.log(`    trace damage: ${current.trace.unreadable} unreadable row(s) skipped`);
     }
@@ -741,7 +815,7 @@ export function checkHooks(cfg: Config, json = false, host: HookHost = "claude",
 }
 
 export async function installHooks(cfg: Config, json = false, host: HookHost = "claude", session?: string | null): Promise<number> {
-  const result = await setLifecycleHook(cfg, true, externalHost(host));
+  const result = await mutateControl(cfg, host, true);
   if (result.errors.length) {
     if (json) console.log(JSON.stringify({ errors: result.errors, control: result.inspection }, null, 2));
     else for (const error of result.errors) console.error(`cannot install lifecycle hook: ${error}`);
@@ -758,7 +832,7 @@ export async function installHooks(cfg: Config, json = false, host: HookHost = "
 }
 
 export async function uninstallHooks(cfg: Config, json = false, host: HookHost = "claude", session?: string | null): Promise<number> {
-  const result = await setLifecycleHook(cfg, false, externalHost(host));
+  const result = await mutateControl(cfg, host, false);
   if (result.errors.length) {
     if (json) console.log(JSON.stringify({ errors: result.errors, control: result.inspection }, null, 2));
     else for (const error of result.errors) console.error(`cannot uninstall lifecycle hook: ${error}`);
@@ -774,10 +848,10 @@ export async function uninstallHooks(cfg: Config, json = false, host: HookHost =
  *  The hook body degrades an unreadable customization to canon silently, because a torn
  *  file must not break a session; THIS is the loud surface where that damage lands, and
  *  the exit code carries it. */
-export function reviewHooks(cfg: Config): number {
+export function reviewHooks(cfg: Config, host: HookHost = "claude"): number {
   const cli = projectCli(cfg);
   const problems: string[] = [];
-  console.log(`Effective lifecycle emissions — what each event will actually say for this project.
+  console.log(`Effective ${host} lifecycle emissions — what each event will actually say for this project.
 
 A project customizes an event with \`.coherence/hooks/<Event>.override.md\` (replaces the
 canonical emission) and \`.coherence/hooks/<Event>.append.md\` (follows it). An EMPTY
@@ -823,6 +897,14 @@ SubagentStart/SessionStart).`);
 /** `coherence hooks` — print one host's canonical block, plus the
  *  instruction text so a reader can see what agents will actually be told. */
 export function printHooks(cfg: Config, host: HookHost = "claude"): void {
+  if (host === "pi") {
+    const inspection = inspectPiLifecycleHook(cfg);
+    console.log(`Canonical pi control for ${resolvePiProjectRoot(cfg)}. Prefer \`coherence hooks install --host pi\`; it preserves unrelated settings.`);
+    console.log(`native package: ${inspection.settings.managedEntries === 1 ? "READY" : "NOT READY"}`);
+    console.log(`root mapping: ${inspection.mapping.expected}`);
+    console.log(`extension target: ${inspection.target.extensionPath || "MISSING"}`);
+    return;
+  }
   const block = canonicalLifecycleHookSettings(externalHost(host));
   const hostRoot = resolveHookProjectRoot(cfg, externalHost(host));
   const hostDir = host === "codex" ? ".codex" : ".claude";

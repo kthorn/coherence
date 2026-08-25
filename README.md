@@ -2363,7 +2363,7 @@ any is in **In detail** below — that half is authored, and does not cover all 
 - `coherence verify [--fast] [--staged | --since <ref>] [--raise [--raise-cap N]] [--apply <verdicts>] [--from-report <file>] [--serial-oracles]` — run the claims, the evidence chain and coverage — the gate
 - `coherence log [<refA> [<refB>]] [--strict]` — structural diff of the invariant/boundary set between two refs, then the novelty advisory
 - `coherence signal [--check] [--since <ref>] [--attest-no-invariant --because <why>]` — require significant behavioral growth to gain an anchor or a patch-bound decision
-- `coherence regulate [--check] [--since <ref>] [--host <claude|codex>] [--json]` — apply the anti-entropy doctrine to live readings and emit exactly one next action
+- `coherence regulate [--check] [--since <ref>] [--host <claude|codex|pi>] [--json]` — apply the anti-entropy doctrine to live readings and emit exactly one next action
 
 **Durable agent record — appends only, gates nothing**
 
@@ -2417,7 +2417,7 @@ any is in **In detail** below — that half is authored, and does not cover all 
 
 - `coherence doctrine [--json]` — print the versioned law the regulator is allowed to apply
 - `coherence phrasebook` — print the claim-form table straight from the `CLAIM_FORMS` registry
-- `coherence hooks [status|install|uninstall|print|review] [--check] [--json] [--host <claude|codex>] [--session <id>]` — the lifecycle control — converge on one canonical, runnable shared hook bundle
+- `coherence hooks [status|install|uninstall|print|review] [--check] [--json] [--host <claude|codex|pi>] [--session <id>]` — the lifecycle control — converge on one canonical, runnable shared hook bundle
 - `coherence hook <event>` — the hook BODY, invoked by the harness rather than by you
 
 <!-- coherence:commands:end -->

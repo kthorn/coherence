@@ -139,7 +139,7 @@ export const COMMANDS: Command[] = [
     summary: "require significant behavioral growth to gain an anchor or a patch-bound decision",
   },
   {
-    name: "regulate", group: "verify", usage: "[--check] [--since <ref>] [--host <claude|codex>] [--json]",
+    name: "regulate", group: "verify", usage: "[--check] [--since <ref>] [--host <claude|codex|pi>] [--json]",
     summary: "apply the anti-entropy doctrine to live readings and emit exactly one next action",
   },
 
@@ -270,7 +270,7 @@ export const COMMANDS: Command[] = [
   { name: "phrasebook", group: "reference", summary: "print the claim-form table straight from the `CLAIM_FORMS` registry" },
   {
     name: "hooks", group: "reference",
-    usage: "[status|install|uninstall|print|review] [--check] [--json] [--host <claude|codex>] [--session <id>]",
+    usage: "[status|install|uninstall|print|review] [--check] [--json] [--host <claude|codex|pi>] [--session <id>]",
     summary: "the lifecycle control — converge on one canonical, runnable shared hook bundle",
   },
   { name: "hook", group: "reference", usage: "<event>", summary: "the hook BODY, invoked by the harness rather than by you" },

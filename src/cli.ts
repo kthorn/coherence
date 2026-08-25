@@ -378,13 +378,13 @@ if (cmd === "graph") {
   const hostCount = argv.filter((arg) => arg === "--host").length;
   const invalidSince = sinceIdx >= 0 && (!since || since.startsWith("--"));
   const hostArg = one("--host");
-  const invalidHost = hostCount > 0 && (hostArg !== "claude" && hostArg !== "codex");
+  const invalidHost = hostCount > 0 && (hostArg !== "claude" && hostArg !== "codex" && hostArg !== "pi");
   const badShape = positional.length > 0 || invalidSince || sinceCount > 1 || hostCount > 1 || invalidHost;
   if (badFlags.length || badShape) {
-    const usage = "usage: coherence regulate [--check] [--since <ref>] [--host <claude|codex>] [--json]";
+    const usage = "usage: coherence regulate [--check] [--since <ref>] [--host <claude|codex|pi>] [--json]";
     const message = badFlags.length
       ? `unsupported flag(s) for regulate: ${badFlags.join(", ")}`
-      : "regulate accepts no positional arguments, one --since value, and one claude|codex --host";
+      : "regulate accepts no positional arguments, one --since value, and one claude|codex|pi --host";
     if (json) console.log(JSON.stringify({ error: message, usage }, null, 2));
     else { console.error(message); console.error(usage); }
     await exit(2);
@@ -393,7 +393,7 @@ if (cmd === "graph") {
     since: since ?? undefined,
     check,
     json,
-    host: hostArg === "claude" || hostArg === "codex" ? hostArg : undefined,
+    host: hostArg === "claude" || hostArg === "codex" || hostArg === "pi" ? hostArg : undefined,
   }));
 } else if (cmd === "decide" || cmd === "blocked") {
   // The write half of the decision journal. Deliberately the cheapest thing in the
@@ -1027,12 +1027,10 @@ if (cmd === "graph") {
     ["install", new Set(["--json", "--host", "--session"])],
     ["uninstall", new Set(["--json", "--host", "--session"])],
     ["print", new Set(["--host"])],
-    // Review takes NO flags — not even --host, because emission CONTENT is
-    // host-independent; only the delivery envelope differs per host.
-    ["review", new Set<string>([])],
+    ["review", new Set(["--host"])],
   ]);
   const usage = "usage: coherence hooks [status|install|uninstall|print|review] [--check]"
-    + " [--host <claude|codex>] [--session <id>] [--json]";
+    + " [--host <claude|codex|pi>] [--session <id>] [--json]";
   const actionFlags = allowed.get(action);
   const badFlags = actionFlags
     ? argv.filter((arg) => arg.startsWith("--") && !actionFlags.has(arg))
@@ -1044,7 +1042,7 @@ if (cmd === "graph") {
     argv.filter((arg) => arg === flag).length > 1);
   const hostArg = one("--host");
   const session = one("--session");
-  const invalidHost = hostArg !== null && hostArg !== "claude" && hostArg !== "codex";
+  const invalidHost = hostArg !== null && hostArg !== "claude" && hostArg !== "codex" && hostArg !== "pi";
   const invalidSession = session === "" || session === "unknown";
   const badShape = !allowed.has(action)
     || (action === "check" && !check)
@@ -1055,7 +1053,7 @@ if (cmd === "graph") {
       : badFlags.length ? `unsupported flag(s) for hooks ${action}: ${badFlags.join(", ")}`
       : missingValues.length ? `missing value for: ${missingValues.join(", ")}`
       : repeatedValues.length ? `repeated hooks selector: ${repeatedValues.join(", ")}`
-      : invalidHost ? `invalid hook host: ${hostArg}; expected claude or codex`
+      : invalidHost ? `invalid hook host: ${hostArg}; expected claude, codex, or pi`
       : "--session requires a non-empty, non-unknown id";
     if (json) console.log(JSON.stringify({ error: message, usage }, null, 2));
     else { console.error(message); console.error(usage); }
@@ -1067,7 +1065,7 @@ if (cmd === "graph") {
   if (action === "install") await exit(await installHooks(cfg, json, host, session));
   if (action === "uninstall") await exit(await uninstallHooks(cfg, json, host, session));
   if (action === "print") { printHooks(cfg, host); await exit(0); }
-  if (action === "review") await exit(reviewHooks(cfg));
+  if (action === "review") await exit(reviewHooks(cfg, host));
 } else if (cmd === "hook") {
   // The hook BODY, so nothing has to be written to disk or kept in sync with a script.
   await exit(await runHook(cfg, positional[0] ?? ""));
