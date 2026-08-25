@@ -24,3 +24,5 @@ dist/
 # reading surfaces now that this repository has a real spec tree. `coherence docs --check`
 # gates their freshness; the other public artifacts are independently generated and already
 # tracked where their commands own them.
+
+.worktrees/
