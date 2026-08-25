@@ -12,6 +12,7 @@ The integration must remain useful when `pi-subagents` is absent. When `pi-subag
 ## Goals
 
 - Add `pi` as an explicit host accepted by `coherence hooks install|uninstall|print|status|review|--check`.
+- Add explicit `coherence regulate --host pi` evaluation and repair while preserving existing default host selection.
 - Install the native extension automatically with `coherence hooks install --host pi`.
 - Preserve coherence's startup instructions, work assignment injection, activity telemetry, path tracing, calibration, and child completion report.
 - Give a Pi child exactly one coherence-triggered final-report turn, never a feedback loop.
@@ -50,7 +51,7 @@ The extension stays dormant when it cannot resolve a declared coherence root con
 
 ### Pi control module
 
-Add a Pi-specific control module for project settings, root mapping, target resolution, installation, inspection, and bundle identity. Existing Claude/Codex control remains in `src/control.ts`; the hooks CLI dispatches `host === "pi"` to the native control.
+Add a Pi-specific control module for project settings, root mapping, target resolution, installation, inspection, and bundle identity. Existing Claude/Codex control remains in `src/control.ts`; the hooks CLI and regulation sensor dispatch `host === "pi"` to the native control.
 
 This separation is intentional: Pi loads a package extension and has no stable shell launcher or host hook JSON bundle. Its inspection type must describe the native package entry rather than pretending that entry is a launcher.
 
@@ -144,7 +145,7 @@ The Pi `tool_result` adapter converts public event fields into coherence's exist
 
 ## CLI and documentation
 
-The existing hooks command accepts `--host pi` for `install`, `uninstall`, `print`, `status`, `review`, and `--check`. Bare `hooks` remains Claude-compatible; ambient Pi variables do not silently change the selected host.
+The existing hooks command accepts `--host pi` for `install`, `uninstall`, `print`, `status`, `review`, and `--check`. `regulate --host pi` reads the same structural/native activation control and repairs it with `hooks install --host pi`. Bare `hooks` and the existing regulation default remain Claude-compatible; ambient Pi variables do not silently change the selected host.
 
 README installation examples add:
 
@@ -166,7 +167,8 @@ Implementation follows TDD. Behavioral tests must cover:
 - malformed settings, duplicate/competing coherence entries, missing targets, and drift;
 - ownership-safe uninstall;
 - structural versus exact-session activation;
-- project-copy preference when a global copy is also present.
+- project-copy preference when a global copy is also present;
+- regulation observes and repairs Pi rather than consulting Claude or Codex control.
 
 ### Extension lifecycle
 
@@ -197,6 +199,7 @@ The authored package spec gains a boundary invariant asserting that native Pi ev
 ## Compatibility
 
 - Existing Claude and Codex settings, fingerprints, output envelopes, and default host selection remain unchanged except for shared helper extraction.
+- Pi becomes available only through an explicit `--host pi`; ambient Pi markers do not change existing defaults.
 - Existing consumers that never select `--host pi` see no new control files.
 - Pi users can install project-local control without a second package copy.
 - Direct `pi install` remains possible through the package manifest, but the coherence installer is the canonical path because it also establishes the checked root mapping.
