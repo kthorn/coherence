@@ -681,8 +681,8 @@ export function currentPiObservation(cfg: Config, control: PiLifecycleInspection
     else if (observed.attribution === "parent-fallback" && observed.agentId === null && observed.parentSession === row.session) scope.parentSessionAggregate++;
     else scope.unscoped++;
     if (observed.transport === "direct") bundle.direct++;
-    else if (observed.host === "pi" && observed.transport === "native" && observed.bundleHash === control.bundleFingerprint) bundle.exactNative++;
-    else bundle.staleNative++;
+    else if (observed.transport === "native" && observed.host === "pi" && observed.bundleHash === control.bundleFingerprint) bundle.exactNative++;
+    else if (observed.transport === "native") bundle.staleNative++;
   }
   let experiment: CurrentPiHookObservation["experiment"];
   try {

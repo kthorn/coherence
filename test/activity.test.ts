@@ -16,6 +16,28 @@ const launcher: ActivityContext = {
   host: "codex", transport: "launcher", bundleHash: "sha256:canonical", experimentId: "plan/v1",
 };
 
+test("Pi status — launcher rows stay separate from stale native buckets", async () => {
+  const root = await tmpProject({ "src/a.ts": "export const a = 1;\n" });
+  try {
+    const c = cfg(root);
+    const payload = (id: string) => ({ session_id: "pi-session", agent_id: "pi-session", tool_use_id: id, tool_name: "Read", tool_input: { path: "src/a.ts" } });
+    const staleContext = { host: "pi", transport: "native", bundleHash: "old-pi", experimentId: null } as const;
+    const directContext = { host: "pi", transport: "direct", bundleHash: null, experimentId: null } as const;
+    recordActivity(c, "PostToolUse", payload("launcher"), launcher, "2026-08-24T00:00:00.000Z");
+    recordHookReads(c, payload("launcher"), "2026-08-24T00:00:00.000Z", launcher);
+    recordActivity(c, "PostToolUse", payload("stale"), staleContext, "2026-08-24T00:00:01.000Z");
+    recordHookReads(c, payload("stale"), "2026-08-24T00:00:01.000Z", staleContext);
+    recordActivity(c, "PostToolUse", payload("direct"), directContext, "2026-08-24T00:00:02.000Z");
+    recordHookReads(c, payload("direct"), "2026-08-24T00:00:02.000Z", directContext);
+    const { currentPiObservation } = await import("../src/hooks.ts");
+    const control = { host: "pi", bundleFingerprint: "pi-bundle" } as Parameters<typeof currentPiObservation>[1];
+    const observation = currentPiObservation(c, control, "pi-session");
+    assert.equal(observation.staleNativeEvents, 1);
+    assert.equal(observation.directEvents, 1);
+    assert.deepEqual(observation.trace.bundle, { exactNative: 0, staleNative: 1, direct: 1, legacy: 0 });
+  } finally { await cleanup(root); }
+});
+
 test("Pi telemetry — native activity and path traces stay exact-session and strict", async () => {
   const root = await tmpProject({ "src/a.ts": "export const a = 1;\n" });
   try {

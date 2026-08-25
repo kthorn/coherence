@@ -358,6 +358,24 @@ test("regulate — completed work requires an explicit verification link before 
   } finally { await cleanup(root); }
 });
 
+test("regulate — configured Pi mapping damage is unavailable, not a redirect", async () => {
+  const root = await tmpProject({ "coherence.config.json": "{}\n" });
+  try {
+    const git = (...args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    git("add", ".");
+    git("commit", "-q", "-m", "base");
+    const config = cfg(root);
+    await setPiLifecycleHook(config, true);
+    await writeFile(join(root, ".pi", "coherence-root"), "drifted\n");
+    const reading = await observeRegulation(config, undefined, { host: "pi" });
+    assert.equal(reading.observations.find((row) => row.rule === "canonical-lifecycle-control")?.status, "unavailable");
+    assert.equal(selectRegulation(reading).action, "refuse");
+  } finally { await cleanup(root); }
+});
+
 test("regulate — selected Pi host cannot be redeemed by Claude or Codex control", async () => {
   const root = await tmpProject({ "coherence.config.json": "{}\n" });
   try {

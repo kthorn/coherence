@@ -300,10 +300,14 @@ export async function observeRegulation(
       status: "unavailable",
       evidence: errors.join("; ") || `${host} lifecycle settings could not be interpreted`,
     });
-  } else if (host === "pi" ? !pi!.target.present : !(control as ReturnType<typeof inspectLifecycleHook>).launcher.targetPresent) {
-    observations.push({ rule: "canonical-lifecycle-control", status: "unavailable", evidence: host === "pi"
+  } else if (host === "pi" && !pi!.settings.canonicalEntries && !pi!.settings.managedEntries && !pi!.mapping.present) {
+    observations.push({ rule: "canonical-lifecycle-control", status: "violated", evidence: "the native Pi package, root mapping, and extension target are absent" });
+  } else if (host === "pi" && (!pi!.target.present || pi!.mapping.actual !== pi!.mapping.expected)) {
+    observations.push({ rule: "canonical-lifecycle-control", status: "unavailable", evidence: !pi!.target.present
       ? `${pi!.target.extensionPath || ".pi extension"}: Pi extension target is missing`
-      : `${(control as ReturnType<typeof inspectLifecycleHook>).launcher.targetPath}: lifecycle target is missing; install this coherence version in the project first` });
+      : `${pi!.mapping.path}: Pi root mapping is missing or drifted` });
+  } else if (host !== "pi" && !(control as ReturnType<typeof inspectLifecycleHook>).launcher.targetPresent) {
+    observations.push({ rule: "canonical-lifecycle-control", status: "unavailable", evidence: `${(control as ReturnType<typeof inspectLifecycleHook>).launcher.targetPath}: lifecycle target is missing; install this coherence version in the project first` });
   } else if (control.present) {
     observations.push({ rule: "canonical-lifecycle-control", status: "satisfied", evidence: host === "pi"
       ? "the native Pi package, root mapping, and extension target are present"
