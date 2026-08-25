@@ -1,6 +1,6 @@
 # Native Pi lifecycle hooks design
 
-**Date:** 2026-08-24  
+**Date:** 2026-08-24
 **Status:** Approved for implementation planning
 
 ## Purpose

@@ -198,7 +198,9 @@ function validObservation(value: unknown, session: string): value is ReadEventOb
     && nullableText(row.agentId)
     && nullableText(row.eventId)
     && (row.eventId === null || /^e-[a-f0-9]{16}$/.test(String(row.eventId)));
-  if (!shape) return false;
+  if (!shape
+    || (row.transport === "native" && row.host !== "pi")
+    || (row.transport === "launcher" && row.host !== "claude" && row.host !== "codex")) return false;
   if (row.attribution === "agent") return row.agentId === session;
   if (row.attribution === "session") return row.agentId === null && row.parentSession === null;
   if (row.attribution === "parent-fallback") return row.agentId === null && row.parentSession === session;

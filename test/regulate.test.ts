@@ -387,7 +387,12 @@ test("regulate — selected Pi host cannot be redeemed by Claude or Codex contro
     git("commit", "-q", "-m", "base");
     const config = cfg(root);
     await setLifecycleHook(config, true, "claude");
-    const absentPi = selectRegulation(await observeRegulation(config, undefined, { host: "pi" }));
+    const absentReading = await observeRegulation(config, undefined, { host: "pi" });
+    const absentControl = absentReading.observations.find((row) => row.rule === "canonical-lifecycle-control");
+    assert.equal(absentControl?.status, "violated");
+    assert.match(absentControl?.evidence ?? "", /project Pi control is absent/i);
+    assert.doesNotMatch(absentControl?.evidence ?? "", /extension target is absent/i);
+    const absentPi = selectRegulation(absentReading);
     assert.equal(absentPi.action, "redirect");
     assert.deepEqual(absentPi.selected?.command, { name: "hooks", args: ["install", "--host", "pi"] });
     await setPiLifecycleHook(config, true);

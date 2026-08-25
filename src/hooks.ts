@@ -304,7 +304,9 @@ export async function prepareChildSettlement(cfg: Config, session: string): Prom
   })).catch((e: unknown) => ({
     kind: "unavailable" as const, text: `CHANGE SIGNAL unavailable: ${e instanceof Error ? e.message : String(e)}`,
   }));
-  return composeStopFeedback("SubagentStop", stopReport(cfg, session), change) ?? "";
+  return composeHookText(composeStopFeedback("SubagentStop", stopReport(cfg, session), change) ?? "", readHookText(cfg, "SubagentStop"), {
+    session, cli: projectCli(cfg), scope: `--session ${JSON.stringify(session)}`,
+  });
 }
 
 /** `coherence hook <event>` — the hook body itself, so nothing has to be written to
@@ -384,12 +386,9 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
         kind: "unavailable" as const,
         text: `CHANGE SIGNAL unavailable: ${e instanceof Error ? e.message : String(e)}`,
       })));
-    // The project's declared voice composes over the canonical report — override
-    // replaces, append follows, and an empty override silences even this surface.
-    const text = composeHookText(feedback ?? "", readHookText(cfg, event), {
-      cli: projectCli(cfg),
-      ...(childSession ? { session: childSession, scope: `--session ${JSON.stringify(childSession)}` } : {}),
-    });
+    // Exact-child composition happens in the shared helper used by native Pi too.
+    // The no-child-id branch still composes here because it has no attributable session.
+    const text = childSession ? feedback : composeHookText(feedback ?? "", readHookText(cfg, event), { cli: projectCli(cfg) });
     if (text) emit(host, event, text);
     return 0;
   }

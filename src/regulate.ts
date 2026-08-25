@@ -301,7 +301,7 @@ export async function observeRegulation(
       evidence: errors.join("; ") || `${host} lifecycle settings could not be interpreted`,
     });
   } else if (host === "pi" && !pi!.settings.canonicalEntries && !pi!.settings.managedEntries && !pi!.mapping.present) {
-    observations.push({ rule: "canonical-lifecycle-control", status: "violated", evidence: "the native Pi package, root mapping, and extension target are absent" });
+    observations.push({ rule: "canonical-lifecycle-control", status: "violated", evidence: "project Pi control is absent; install the native package entry and root mapping" });
   } else if (host === "pi" && (!pi!.target.present || pi!.mapping.actual !== pi!.mapping.expected)) {
     observations.push({ rule: "canonical-lifecycle-control", status: "unavailable", evidence: !pi!.target.present
       ? `${pi!.target.extensionPath || ".pi extension"}: Pi extension target is missing`

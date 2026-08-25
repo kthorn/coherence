@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-25 19:52Z",
+  "generatedAt": "2026-08-25 21:03Z",
   "root": "coherence",
   "absRoot": "/home/kthorn/coherence/.worktrees/native-pi-hooks-impl",
   "nodes": [
@@ -434,7 +434,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/activity.ts",
-      "line": 296,
+      "line": 298,
       "prose": "A torn or foreign row is skipped and counted, never converted into no activity."
     },
     {
@@ -444,7 +444,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/activity.ts",
-      "line": 349,
+      "line": 351,
       "prose": "The launcher view is separate by construction. A direct/manual body invocation remains\nuseful diagnostic activity but cannot become proof that installed, trusted wiring ran."
     },
     {
@@ -3505,7 +3505,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 314,
+      "line": 316,
       "prose": "`coherence hook <event>` — the hook body itself, so nothing has to be written to\n disk or kept in sync with a script file. Reads the event payload on stdin (unused\n today, but hooks are fed JSON and ignoring it silently would be rude to the next\n person who needs a field from it) and prints the documented output shape."
     },
     {
@@ -3515,7 +3515,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 419,
+      "line": 418,
       "prose": "What a subagent is told as it finishes. Split out of `runHook` so it is reachable\n without a stdin pipe — the hook body drains stdin, and a report you can only observe\n by feeding a process is a report nobody tests."
     },
     {
@@ -3525,7 +3525,7 @@
       "kind": "symbol",
       "sub": "interface",
       "path": "src/hooks.ts",
-      "line": 504
+      "line": 503
     },
     {
       "id": "s:src/hooks.ts#CurrentPiHookObservation",
@@ -3534,7 +3534,7 @@
       "kind": "symbol",
       "sub": "interface",
       "path": "src/hooks.ts",
-      "line": 516
+      "line": 515
     },
     {
       "id": "s:src/hooks.ts#CurrentHookObservation",
@@ -3543,7 +3543,7 @@
       "kind": "symbol",
       "sub": "interface",
       "path": "src/hooks.ts",
-      "line": 532
+      "line": 531
     },
     {
       "id": "s:src/hooks.ts#activeHookHost",
@@ -3552,7 +3552,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 557,
+      "line": 556,
       "prose": "Which host owns the current shell. Explicit selection always wins."
     },
     {
@@ -3562,7 +3562,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 563,
+      "line": 562,
       "prose": "Never pick the newest session: concurrency makes \"latest\" an attribution bug."
     },
     {
@@ -3572,7 +3572,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 592
+      "line": 591
     },
     {
       "id": "s:src/hooks.ts#currentPiObservation",
@@ -3581,7 +3581,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 668,
+      "line": 667,
       "prose": "Structural configuration, historical memory, and this exact session stay separate."
     },
     {
@@ -3591,7 +3591,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 703
+      "line": 710
     },
     {
       "id": "s:src/hooks.ts#reportHooks",
@@ -3600,7 +3600,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 806,
+      "line": 813,
       "prose": "`coherence hooks status` — report the switch and the observation beside it."
     },
     {
@@ -3610,7 +3610,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 813,
+      "line": 820,
       "prose": "`coherence hooks --check` — the binary current-control gate. Observation never redeems absence."
     },
     {
@@ -3620,7 +3620,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 823
+      "line": 830
     },
     {
       "id": "s:src/hooks.ts#uninstallHooks",
@@ -3629,7 +3629,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 840
+      "line": 847
     },
     {
       "id": "s:src/hooks.ts#reviewHooks",
@@ -3638,7 +3638,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 857,
+      "line": 864,
       "prose": "`coherence hooks review` — every event's EFFECTIVE emission, with its provenance.\n The hook body degrades an unreadable customization to canon silently, because a torn\n file must not break a session; THIS is the loud surface where that damage lands, and\n the exit code carries it."
     },
     {
@@ -3648,7 +3648,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/hooks.ts",
-      "line": 905,
+      "line": 912,
       "prose": "`coherence hooks` — print one host's canonical block, plus the\n instruction text so a reader can see what agents will actually be told."
     },
     {
@@ -5268,7 +5268,7 @@
       "kind": "symbol",
       "sub": "const",
       "path": "src/pi-control.ts",
-      "line": 7
+      "line": 9
     },
     {
       "id": "s:src/pi-control.ts#PI_HOOK_PROTOCOL_VERSION",
@@ -5277,7 +5277,7 @@
       "kind": "symbol",
       "sub": "const",
       "path": "src/pi-control.ts",
-      "line": 8
+      "line": 10
     },
     {
       "id": "s:src/pi-control.ts#PI_HOOK_BUNDLE_FINGERPRINT",
@@ -5286,7 +5286,7 @@
       "kind": "symbol",
       "sub": "const",
       "path": "src/pi-control.ts",
-      "line": 9
+      "line": 18
     },
     {
       "id": "s:src/pi-control.ts#resolvePiProjectRoot",
@@ -5295,7 +5295,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/pi-control.ts",
-      "line": 70
+      "line": 108
     },
     {
       "id": "s:src/pi-control.ts#PiLifecycleInspection",
@@ -5304,7 +5304,7 @@
       "kind": "symbol",
       "sub": "interface",
       "path": "src/pi-control.ts",
-      "line": 72
+      "line": 110
     },
     {
       "id": "s:src/pi-control.ts#PiLifecycleMutation",
@@ -5313,7 +5313,7 @@
       "kind": "symbol",
       "sub": "interface",
       "path": "src/pi-control.ts",
-      "line": 79
+      "line": 117
     },
     {
       "id": "s:src/pi-control.ts#inspectPiLifecycleHook",
@@ -5322,7 +5322,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/pi-control.ts",
-      "line": 81
+      "line": 119
     },
     {
       "id": "s:src/pi-control.ts#setPiLifecycleHook",
@@ -5331,7 +5331,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/pi-control.ts",
-      "line": 97
+      "line": 135
     },
     {
       "id": "s:src/pi-control.ts#resolvePiRuntimeRoot",
@@ -5340,7 +5340,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/pi-control.ts",
-      "line": 122
+      "line": 167
     },
     {
       "id": "f:src/pi-extension.ts",
@@ -6125,7 +6125,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/read-trace.ts",
-      "line": 216,
+      "line": 218,
       "prose": "Strict reader used by experiments and status surfaces that must report lost evidence."
     },
     {
@@ -6135,7 +6135,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/read-trace.ts",
-      "line": 263,
+      "line": 265,
       "prose": "Historical convenience reader: callers needing loss accounting use readTraceDetailed."
     },
     {
@@ -10689,6 +10689,12 @@
       "kind": "imports"
     },
     {
+      "id": "f:src/pi-control.ts->x:node:crypto:imports",
+      "source": "f:src/pi-control.ts",
+      "target": "x:node:crypto",
+      "kind": "imports"
+    },
+    {
       "id": "f:src/pi-control.ts->x:node:fs:imports",
       "source": "f:src/pi-control.ts",
       "target": "x:node:fs",
@@ -10710,6 +10716,12 @@
       "id": "f:src/pi-control.ts->x:node:url:imports",
       "source": "f:src/pi-control.ts",
       "target": "x:node:url",
+      "kind": "imports"
+    },
+    {
+      "id": "f:src/pi-control.ts->f:src/control.ts:imports",
+      "source": "f:src/pi-control.ts",
+      "target": "f:src/control.ts",
       "kind": "imports"
     },
     {
@@ -11670,6 +11682,12 @@
       "id": "f:test/activity.test.ts->f:src/control.ts:imports",
       "source": "f:test/activity.test.ts",
       "target": "f:src/control.ts",
+      "kind": "imports"
+    },
+    {
+      "id": "f:test/activity.test.ts->f:src/pi-control.ts:imports",
+      "source": "f:test/activity.test.ts",
+      "target": "f:src/pi-control.ts",
       "kind": "imports"
     },
     {
@@ -13821,6 +13839,12 @@
       "kind": "imports"
     },
     {
+      "id": "f:test/pi-control.test.ts->x:node:crypto:imports",
+      "source": "f:test/pi-control.test.ts",
+      "target": "x:node:crypto",
+      "kind": "imports"
+    },
+    {
       "id": "f:test/pi-control.test.ts->x:node:fs/promises:imports",
       "source": "f:test/pi-control.test.ts",
       "target": "x:node:fs/promises",
@@ -13842,6 +13866,12 @@
       "id": "f:test/pi-control.test.ts->f:test/_helpers.ts:imports",
       "source": "f:test/pi-control.test.ts",
       "target": "f:test/_helpers.ts",
+      "kind": "imports"
+    },
+    {
+      "id": "f:test/pi-control.test.ts->f:src/control.ts:imports",
+      "source": "f:test/pi-control.test.ts",
+      "target": "f:src/control.ts",
       "kind": "imports"
     },
     {
@@ -13908,6 +13938,12 @@
       "id": "f:test/pi-extension.test.ts->f:src/pi-extension.ts:imports",
       "source": "f:test/pi-extension.test.ts",
       "target": "f:src/pi-extension.ts",
+      "kind": "imports"
+    },
+    {
+      "id": "f:test/pi-extension.test.ts->x:@earendil-works/pi-coding-agent:imports",
+      "source": "f:test/pi-extension.test.ts",
+      "target": "x:@earendil-works/pi-coding-agent",
       "kind": "imports"
     },
     {

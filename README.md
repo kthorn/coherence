@@ -799,16 +799,17 @@ project-local dependency; no global installation is assumed.
    # or use the corresponding host-specific package script above
    ```
 
-   Exit `0` means the singular canonical bundle, launcher, root mapping, and runnable
-   target are all present. Exit `1` means absent/noncanonical; exit `2` means the checker
+   Exit `0` means the singular canonical control and runnable target are present: the
+   settings/launcher/mapping bundle for Claude or Codex, or Pi's native package/root/target.
+   Exit `1` means absent/noncanonical; exit `2` means the checker
    could not answer safely (for example, invalid settings). A partial block, duplicate,
    legacy spelling, competing action, drifted launcher, misaligned Codex/Git root,
    excluded or disabled Codex project hooks, or missing target is OFF.
 
 5. **Activate and prove the current session separately.** Installation cannot make
-   a hook fire retroactively. Review the exact project hook in Codex `/hooks`, then start
-   or resume the session so `SessionStart` crosses the installed launcher. Inspect the
-   same session by id:
+   a hook fire retroactively. On Codex, review the exact project hook in `/hooks`, then start
+   or resume so `SessionStart` crosses the installed launcher. On Pi, start or resume with
+   the selected native package/root/target control. Inspect the same session by id:
 
    ```sh
    npx coherence hooks status --host codex --session "$CODEX_THREAD_ID"
@@ -819,12 +820,13 @@ project-local dependency; no global installation is assumed.
 
    With `--session`, `--check` requires both the structural bit and an event delivered by
    the exact selected host, canonical host transport, and installed bundle fingerprint. That
-   fingerprint includes the hook-body protocol as well as settings and launcher bytes,
+   fingerprint includes the hook-body protocol as well as the selected host's structural control,
    so an event from an older wire contract cannot prove the new body ran. A manual
    `coherence hook` probe is reported as direct evidence, not activation; an older bundle
    is reported as stale. There is deliberately no “newest session” fallback—concurrency
    makes newest an attribution bug. When neither `--session`, `COHERENCE_SESSION`, nor
-   `CODEX_THREAD_ID` supplies an identity, `status` says the current session is unknown.
+   the selected host identity (`CODEX_THREAD_ID` or `PI_SESSION_ID`) supplies a value,
+   `status` says the current session is unknown.
    Historical hook-opened sessions remain telemetry: yesterday's firing cannot redeem
    wiring removed today, and a newly installed runnable control can be present while this
    session's activation remains unconfirmed.
@@ -843,8 +845,7 @@ project-local dependency; no global installation is assumed.
    remain visible as `legacy-unscoped`. Unreadable or internally unscoped/unknown rows
    refuse closure. `none` is an attribution result, not proof of a zero failure rate:
    without current-bundle activation and a nonzero predeclared event denominator, hook
-   reliability remains unmeasured. Likewise, a
-   Pi optionally detects `pi-subagents` but does not require or import it. When
+   reliability remains unmeasured. Pi does not require or import `pi-subagents`. When
    `PI_SUBAGENT_CHILD=1`, the exact child session is attributed and one extra child report
    turn is guarded. `SubagentStop` without an exact child id reports the child journal count as unavailable
    and takes no child calibration snapshot; the repository-wide open-conjecture reminder
@@ -863,9 +864,9 @@ project-local dependency; no global installation is assumed.
    agents' reasoning at the moment it happens instead of reconstructing it afterward.
 
 `npx coherence hooks print --host codex` (or `--host claude`) renders that host's canonical
-settings, launcher, and mapping for inspection. It is not the preferred installer. The
-launcher and mapping paths are coherence-owned: `install` repairs drift at those names,
-while `uninstall --host …` removes them only if their bytes still prove coherence ownership.
+settings, launcher, and mapping; `--host pi` renders Pi's native package, root mapping, and
+target. It is not the preferred installer. Coherence-owned control paths are repaired by
+`install`; `uninstall --host …` removes them only while their bytes prove ownership.
 
 ### The project's voice in the emissions
 
@@ -1499,20 +1500,21 @@ coherence hooks uninstall --host codex # leaves unrelated settings and hooks int
 ```
 
 The hook is a **control value**, not a family of similar snippets. Printing, installing,
-and checking all derive from one host-selected five-event value and byte-exact launcher.
-Host parity means one contract with host-native syntax, not pretending Claude and Codex
-consume the same JSON or output shape. `--check` without a session answers the structural
+and checking derive from one host-selected lifecycle value: a byte-exact launcher bundle
+for Claude/Codex or Pi's native package/root/target. Host parity means one contract with
+host-native syntax, not pretending the three hosts consume the same control or output shape.
+`--check` without a session answers the structural
 question: is the selected host's complete shared control present and runnable? With an
 exact `--session`, it additionally requires an event from this host's installed bundle.
 A partial block, older spelling, duplicate, wrong matcher, direct diagnostic invocation,
 or stale bundle cannot earn that reading; unrelated hooks may coexist. `install` converges
 recognized older spellings and is byte-idempotent.
 
-Each host's `coherence-hook` and `coherence-root` are coherence-owned control files.
-`install` atomically repairs drift or collisions at those exact names; `uninstall` removes
-either file only while its bytes still prove coherence ownership. Layout is data: declare
-the host root with `claudeProjectRoot` or `codexProjectRoot`, and the mapping addresses the
-coherence root without minting a repository-specific launcher.
+Claude/Codex `coherence-hook` and `coherence-root` files are coherence-owned controls;
+Pi instead owns `.pi/settings.json` package composition and `.pi/coherence-root`. `install`
+atomically repairs recognized drift while preserving unrelated settings; `uninstall`
+removes owned bytes only while they still prove coherence ownership. Layout is data:
+declare the appropriate host project root, and its mapping addresses the coherence root.
 
 **Configuration, current-session activation, and historical observation are different
 facts.** `status` prints all three. Old activity cannot redeem a hook removed today; an
@@ -1538,7 +1540,7 @@ full orientation projection or infer causal links. This instruction contract is 
 the versioned hook-body protocol, so installing an update still requires a new start or
 resume before current-bundle activation can be observed. `PostToolUse` records only explicit
 read/write path fields in a transient per-session trace and narrow lifecycle/command
-activity carrying host, launcher, bundle, and the strongest available attribution; it does
+activity carrying host, transport, bundle, and the strongest available attribution; it does
 no graph or git analysis on that high-frequency path. The path trace is an explicit-path
 lower bound whose current rows carry that observation identity; status partitions exact,
 stale, direct, parent-aggregate, and legacy rows and counts malformed lines. Older rows

@@ -262,6 +262,8 @@ export function isActivityRow(value: unknown, session: string): value is Activit
   const row = object(value);
   if (row.version !== 1 || row.session !== session || !text(row.at) || !text(row.event)
     || !HOSTS.has(String(row.host)) || (row.transport !== "launcher" && row.transport !== "native" && row.transport !== "direct")
+    || (row.transport === "native" && row.host !== "pi")
+    || (row.transport === "launcher" && row.host !== "claude" && row.host !== "codex")
     || !ATTRIBUTIONS.has(String(row.attribution))) return false;
   for (const key of ["bundleHash", "parentSession", "agentId", "turn", "tool", "toolUseId", "eventId", "experimentId"] as const) {
     if (row[key] !== null && !text(row[key])) return false;
