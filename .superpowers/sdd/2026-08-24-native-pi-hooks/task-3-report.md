@@ -78,3 +78,49 @@ The full suite exceeded the 300-second outer timeout. The last visible completed
 
 - Full-suite completion is unverified because of the outer timeout; focused tests, typecheck, and build passed.
 - The extension deliberately relies on the host-provided Pi dependency at runtime; consumers without Pi remain unaffected because the peer is optional and the extension is dormant unless mapped.
+
+## Fix Round 1
+
+### Changed files
+
+- `src/pi-extension.ts` — reset `config`, `identity`, and `childFeedbackSent` at the start of every `session_start`, before root resolution/loading.
+- `test/pi-extension.test.ts` — added inactive-later-session dormancy coverage and main settlement evidence/silence coverage.
+
+### TDD RED
+
+With the reset removed and the focused tests otherwise complete:
+
+```text
+$ env -u PI_SUBAGENT_CHILD -u PI_SUBAGENT_CHILD_AGENT node --test test/pi-extension.test.ts
+# tests 4
+# pass 3
+# fail 1
+not ok 3 - Pi extension — an inactive later session cannot reuse prior activation state
+Expected values to be strictly equal: actual systemPrompt object, expected undefined
+```
+
+This demonstrated stale instructions surviving an inactive subsequent session.
+
+### TDD GREEN and validation
+
+```text
+$ env -u PI_SUBAGENT_CHILD -u PI_SUBAGENT_CHILD_AGENT node --test test/pi-extension.test.ts
+# tests 4
+# pass 4
+# fail 0
+
+$ npm run typecheck
+# exited 0
+
+$ npm run build
+# exited 0
+
+$ test -f dist/pi-extension.js
+# exited 0
+```
+
+The main settlement test asserts zero sent model messages and a `Stop` activity row for the exact `pi-main-settlement` session. The dormancy test changes to an unowned root, fires `session_start`, and verifies no stale system prompt or child report remains.
+
+### Concerns
+
+None beyond the previously documented full-suite timeout; the long suite was intentionally not rerun for this fix round.

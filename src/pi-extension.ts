@@ -45,6 +45,9 @@ export default function registerPiHooks(pi: ExtensionAPI): void {
   let childFeedbackSent = false;
 
   pi.on("session_start", async (_event, ctx) => {
+    config = null;
+    identity = null;
+    childFeedbackSent = false;
     try {
       const selected = resolvePiRuntimeRoot(ctx.cwd, fileURLToPath(import.meta.url));
       if (!selected.active) return;
