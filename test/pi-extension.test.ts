@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import test from "node:test";
 import { PI_EXTENSION_ID } from "../src/pi-control.ts";
+import { loadConfig } from "../src/config.ts";
+import { readCalibrationSamples } from "../src/calibration.ts";
 import { PI_COHERENCE_EXTENSION_ACK, default as registerPiHooks } from "../src/pi-extension.ts";
 
 async function fixture() {
@@ -123,12 +126,24 @@ test("Pi extension — main settlement records exact-session evidence without se
   delete process.env.PI_SUBAGENT_CHILD_AGENT;
   try {
     registerPiHooks(runtime.pi);
+    await writeFile(join(root, "observed.txt"), "baseline\n");
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync("git", ["commit", "-qm", "baseline"], { cwd: root });
+    await writeFile(join(root, "observed.txt"), "changed\n");
     await runtime.fire("session_start", {});
+    await runtime.fire("tool_result", { type: "tool_result", toolCallId: "call-write-main", toolName: "write", input: { file_path: "observed.txt" }, content: [], isError: false, details: undefined });
+    await runtime.fire("tool_result", { type: "tool_result", toolCallId: "call-read-main", toolName: "read", input: { file_path: "package.json" }, content: [{ type: "text", text: "{}" }], isError: false, details: undefined });
     await runtime.fire("agent_settled", {});
     assert.equal(runtime.sent.length, 0);
-    const activity = await readFile(join(root, ".coherence/activity/pi-main-settlement.jsonl"), "utf8");
-    assert.match(activity, /"session":"pi-main-settlement"/);
-    assert.match(activity, /"event":"Stop"/);
+    const cfg = await loadConfig(root);
+    const samples = readCalibrationSamples(cfg);
+    assert.equal(samples.length, 1);
+    assert.equal(samples[0].session, "pi-main-settlement");
+    assert.deepEqual(samples[0].changed, ["observed.txt"]);
+    assert.deepEqual(samples[0].observed, ["package.json"]);
   } finally {
     process.env = old;
     await rm(root, { recursive: true, force: true });

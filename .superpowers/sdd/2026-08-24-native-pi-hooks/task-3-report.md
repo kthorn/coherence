@@ -124,3 +124,54 @@ The main settlement test asserts zero sent model messages and a `Stop` activity 
 ### Concerns
 
 None beyond the previously documented full-suite timeout; the long suite was intentionally not rerun for this fix round.
+
+## Fix Round 2
+
+### Changed files
+
+- `test/pi-extension.test.ts` — main settlement now creates a real Git baseline and material change, records native Write and Read traces, fires the registered `agent_settled`, then asserts the persisted calibration sample.
+
+### Calibration artifact asserted
+
+The test reads `.coherence/calibration/pi-main-settlement.jsonl` through `readCalibrationSamples` and asserts exactly one sample with:
+
+- `session: "pi-main-settlement"`
+- `changed: ["observed.txt"]`
+- `observed: ["package.json"]`
+
+This fails if `recordMainSettlement` is removed because no calibration sample is persisted.
+
+### TDD RED
+
+The production settlement call was temporarily replaced with an empty main branch:
+
+```text
+$ env -u PI_SUBAGENT_CHILD -u PI_SUBAGENT_CHILD_AGENT node --test test/pi-extension.test.ts
+# tests 4
+# pass 3
+# fail 1
+not ok 4 - Pi extension — main settlement records exact-session evidence without sending a model message
+0 !== 1
+```
+
+### TDD GREEN and validation
+
+After restoring the minimal `await recordMainSettlement(config, identity.session)` call:
+
+```text
+$ node --test test/pi-extension.test.ts
+# tests 4
+# pass 4
+# fail 0
+
+$ npm run typecheck
+# exited 0
+
+$ npm run build
+# exited 0
+
+$ test -f dist/pi-extension.js
+# exited 0
+```
+
+The full suite was intentionally not run.
