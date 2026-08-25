@@ -694,8 +694,16 @@ export function currentPiObservation(cfg: Config, control: PiLifecycleInspection
     updatePlanEvents: exact.filter((row) => row.event === "PostToolUse" && row.tool === "update_plan").length, parentFallbackEvents: exact.filter((row) => row.attribution === "parent-fallback").length, unreadableActivity: activityRead.unreadable, verification: commandCounts(exact, "verification"), intervention: commandCounts(exact, "intervention"), experiment };
 }
 
-type ExternalHookStatus = Omit<HookStatus, "observation"> & { observation: Omit<HookStatus["observation"], "current"> & { current: CurrentHookObservation | null } };
-type PiHookStatus = Omit<HookStatus, "observation"> & { observation: Omit<HookStatus["observation"], "current"> & { current: CurrentPiHookObservation | null } };
+type ExternalHookStatus = Omit<HookStatus, "host" | "control" | "observation"> & {
+  host: ExternalHookHost;
+  control: LifecycleHookInspection;
+  observation: Omit<HookStatus["observation"], "current"> & { current: CurrentHookObservation | null };
+};
+type PiHookStatus = Omit<HookStatus, "host" | "control" | "observation"> & {
+  host: "pi";
+  control: PiLifecycleInspection;
+  observation: Omit<HookStatus["observation"], "current"> & { current: CurrentPiHookObservation | null };
+};
 
 export function hookStatus(cfg: Config, host: "claude" | "codex", session?: string | null): ExternalHookStatus;
 export function hookStatus(cfg: Config, host: "pi", session?: string | null): PiHookStatus;

@@ -15,7 +15,7 @@ import {
   setLifecycleHook,
 } from "../src/control.ts";
 import { inspectPiLifecycleHook } from "../src/pi-control.ts";
-import { checkHooks } from "../src/hooks.ts";
+import { checkHooks, hookStatus } from "../src/hooks.ts";
 import { loadConfig } from "../src/config.ts";
 import { openSession } from "../src/decisions.ts";
 import { cfg, cleanup, runCaptured, tmpProject } from "./_helpers.ts";
@@ -444,4 +444,12 @@ test("control — this repository's own lifecycle control is PRESENT", async () 
     assert.equal(inspection.present, true, `${host}\n${JSON.stringify(inspection, null, 2)}`);
     assert.deepEqual(inspection.warnings, [], host);
   }
+  const piStatus = hookStatus(config, "pi");
+  assert.equal(piStatus.host, "pi");
+  assert.equal(piStatus.control.host, "pi");
+  void piStatus.observation.current?.exactNativeEvents;
+  const externalStatus = hookStatus(config, "claude");
+  assert.equal(externalStatus.host, "claude");
+  void externalStatus.control.launcher.targetPath;
+  void externalStatus.observation.current?.exactLauncherEvents;
 });

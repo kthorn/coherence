@@ -749,7 +749,9 @@ project-local dependency; no global installation is assumed.
    ```
 
    Pi receives native in-process session, tool, and settlement events rather than a launcher.
-   Its optional `piProjectRoot` selects the project containing `.pi/settings.json`.
+   Its optional `piProjectRoot` selects the project containing `.pi/settings.json`. A copied
+   or globally installed Pi extension is dormant outside a declared coherence root with a
+   matching `.pi/coherence-root` mapping, so installing it cannot affect unrelated projects.
 
    Codex receives its own matchers and launcher identity:
 
