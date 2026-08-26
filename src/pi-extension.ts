@@ -30,7 +30,7 @@ function toolPayload(event: ToolResultEvent, identity: LifecycleIdentity): Recor
   if (typeof details.exitCode === "number" && Number.isInteger(details.exitCode)) response.exitCode = details.exitCode;
   return {
     session_id: identity.session,
-    agent_id: identity.agent === "main" ? undefined : identity.session,
+    agent_id: identity.session,
     tool_name: toolName(event.toolName),
     tool_use_id: event.toolCallId,
     tool_input: event.input,

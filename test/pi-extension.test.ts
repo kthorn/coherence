@@ -95,7 +95,7 @@ test("Pi extension — main settlement stays silent and child settlement trigger
   assert.match(runtime.sent[0]!.message.content, /YOUR REPLY MUST RESTATE YOUR FINAL REPORT/);
 });
 
-test("Pi extension — acknowledgement and tool results use native telemetry without patching", { concurrency: false }, async () => {
+test("Pi extension — main tool results use exact-session native telemetry without patching", { concurrency: false }, async () => {
   const root = await fixture();
   const runtime = fakePi(root, "pi-main-session");
   const old = { ...process.env };
@@ -120,8 +120,16 @@ test("Pi extension — acknowledgement and tool results use native telemetry wit
     assert.match(activity, /"result":"success"/);
     assert.match(activity, /"result":"failure"/);
     assert.match(activity, /"result":"unknown"/);
+    const toolRows = activity.trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((row) => row.event === "PostToolUse");
+    assert.equal(toolRows.length, 5);
+    assert.ok(toolRows.every((row) => row.attribution === "agent"));
+    assert.ok(toolRows.every((row) => row.agentId === "pi-main-session"));
     const traces = await readFile(join(root, ".coherence/read-traces/pi-main-session.jsonl"), "utf8");
     assert.match(traces, /"path":"package.json"/);
+    const trace = JSON.parse(traces.trim()) as { observation: { attribution: string; agentId: string | null } };
+    assert.equal(trace.observation.attribution, "agent");
+    assert.equal(trace.observation.agentId, "pi-main-session");
   } finally {
     process.env = old;
     await rm(root, { recursive: true, force: true });
