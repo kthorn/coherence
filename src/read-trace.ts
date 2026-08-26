@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   activityRow,
+  isActivityHostTransport,
   type ActivityAttribution,
   type ActivityHost,
   type ActivityTransport,
@@ -179,7 +180,6 @@ export function recordHookReads(
   return events;
 }
 
-const HOSTS = new Set<string>(["claude", "codex", "pi", "unknown"]);
 const ATTRIBUTIONS = new Set<string>(["agent", "session", "parent-fallback", "unknown"]);
 
 function nullableText(value: unknown): boolean {
@@ -190,17 +190,14 @@ function validObservation(value: unknown, session: string): value is ReadEventOb
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
   const shape = row.version === 1
-    && HOSTS.has(String(row.host))
-    && (row.transport === "launcher" || row.transport === "native" || row.transport === "direct")
+    && isActivityHostTransport(row.host, row.transport)
     && ATTRIBUTIONS.has(String(row.attribution))
     && nullableText(row.bundleHash)
     && nullableText(row.parentSession)
     && nullableText(row.agentId)
     && nullableText(row.eventId)
     && (row.eventId === null || /^e-[a-f0-9]{16}$/.test(String(row.eventId)));
-  if (!shape
-    || (row.transport === "native" && row.host !== "pi")
-    || (row.transport === "launcher" && row.host !== "claude" && row.host !== "codex")) return false;
+  if (!shape) return false;
   if (row.attribution === "agent") return row.agentId === session;
   if (row.attribution === "session") return row.agentId === null && row.parentSession === null;
   if (row.attribution === "parent-fallback") return row.agentId === null && row.parentSession === session;

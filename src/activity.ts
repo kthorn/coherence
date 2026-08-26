@@ -106,6 +106,13 @@ export const activityPath = (cfg: Config, session: string): string =>
 
 const HOSTS = new Set<string>(["claude", "codex", "pi", "unknown"]);
 const ATTRIBUTIONS = new Set<string>(["agent", "session", "parent-fallback", "unknown"]);
+
+export function isActivityHostTransport(host: unknown, transport: unknown): boolean {
+  return (host === "pi" && transport === "native")
+    || ((host === "claude" || host === "codex") && transport === "launcher")
+    || (HOSTS.has(String(host)) && transport === "direct");
+}
+
 const RESULTS = new Set<string>(["success", "failure", "unknown"]);
 
 const object = (value: unknown): Record<string, unknown> =>
@@ -261,9 +268,7 @@ export function recordActivity(
 export function isActivityRow(value: unknown, session: string): value is ActivityRow {
   const row = object(value);
   if (row.version !== 1 || row.session !== session || !text(row.at) || !text(row.event)
-    || !HOSTS.has(String(row.host)) || (row.transport !== "launcher" && row.transport !== "native" && row.transport !== "direct")
-    || (row.transport === "native" && row.host !== "pi")
-    || (row.transport === "launcher" && row.host !== "claude" && row.host !== "codex")
+    || !isActivityHostTransport(row.host, row.transport)
     || !ATTRIBUTIONS.has(String(row.attribution))) return false;
   for (const key of ["bundleHash", "parentSession", "agentId", "turn", "tool", "toolUseId", "eventId", "experimentId"] as const) {
     if (row[key] !== null && !text(row[key])) return false;
