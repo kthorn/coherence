@@ -15,7 +15,7 @@ import { buildGraph } from "./derive.ts";
 import { renderOutline } from "./render-outline.ts";
 import { renderOverview } from "./render-overview.ts";
 import { renderClaude, spliceBlock, extractBlock, resolveClaudeMdPath, CLAUDE_BEGIN, CLAUDE_END } from "./render-claude.ts";
-import { renderCommandsBlock, renderPhrasebookBlock, usageBanner, commandFor, COMMANDS_BEGIN, COMMANDS_END, PHRASEBOOK_BEGIN, PHRASEBOOK_END } from "./commands.ts";
+import { renderCommandsBlock, renderPhrasebookBlock, usageBanner, commandFor, commandEffect, COMMANDS_BEGIN, COMMANDS_END, PHRASEBOOK_BEGIN, PHRASEBOOK_END } from "./commands.ts";
 import { runVerify, applyVerdicts } from "./verify.ts";
 import { decompose } from "./decompose.ts";
 import { drift } from "./drift.ts";
@@ -67,6 +67,7 @@ import {
   recordConsequence, renderConsequences, type ConsequenceRelation,
 } from "./consequence.ts";
 import { observeOrientation, renderOrientation } from "./orient.ts";
+import { projectWritePolicy, writeRefusal } from "./write-policy.ts";
 
 const cmd = process.argv[2];
 const argv = process.argv.slice(3);
@@ -140,6 +141,11 @@ process.on("uncaughtException", renderUnrunnable);
 process.on("unhandledRejection", renderUnrunnable);
 
 const cfg = await loadConfig(process.cwd());
+const effect = commandEffect(cmd, argv);
+if (effect === "write" && cmd !== "hook") {
+  const refusal = writeRefusal(projectWritePolicy(cfg), `coherence ${cmd}`);
+  if (refusal) { for (const line of refusal) console.error(line); await exit(2); }
+}
 const stamp = new Date().toISOString().slice(0, 16).replace("T", " ") + "Z";
 const out = (p: string) => join(cfg.root, cfg.outputDir, p);
 const normStamp = (s: string) => s.replace(/<span id="stamp">[^<]*<\/span>/, '<span id="stamp"></span>');
