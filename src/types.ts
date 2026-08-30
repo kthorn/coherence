@@ -54,6 +54,7 @@ export type ExternalHookHost = Exclude<HookHost, "pi">;
 
 export interface Config {
   root: string;
+  protectPrimaryCheckout?: boolean; // opt-in: Coherence writes require a registered linked worktree
   // THE PROJECT'S NAME, DECLARED — because it is rendered INTO every generated artifact
   // (the AGENTS.md title and structure tree, graph.json's `root`, both HTML headers, the
   // contract), and an artifact is supposed to be a pure function of the TRACKED tree.
