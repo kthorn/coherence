@@ -37,6 +37,7 @@ import {
 import { readTraceDetailed, recordHookReads } from "./read-trace.ts";
 import { readExperiments } from "./experiment.ts";
 import type { Config } from "./types.ts";
+import { lifecyclePersistenceNotice, projectWritePolicy, type ProjectWritePolicy } from "./write-policy.ts";
 
 /** Use the source entrypoint only while this repository dogfoods itself. Consumers get
  * the installed binary. Keeping this choice here also means the injected command is the
@@ -221,14 +222,21 @@ export async function prepareSessionStart(
   cfg: Config,
   event: "SessionStart" | "SubagentStart",
   identity: LifecycleIdentity,
+  policy: ProjectWritePolicy,
 ): Promise<string> {
   let rec = { session: identity.session, agent: identity.agent };
   let journalControl: string[] = [];
   try {
     const trusted = readTrustedJournal(cfg);
-    if (!trusted.ok) throw new Error(`${trusted.damage.length} decision journal damage item(s)`);
-    rec = trusted.records.find((r) => r.kind === "session" && r.session === identity.session)
-      ?? openSession(cfg, { session: identity.session, agent: identity.agent, job: identity.job });
+    if (!trusted.ok) {
+      if (policy.writable) throw new Error(`${trusted.damage.length} decision journal damage item(s)`);
+      journalControl = ["", `JOURNAL CONTROL unavailable: ${trusted.damage.length} decision journal damage item(s)`];
+    } else {
+      const existing = trusted.records.find((r) => r.kind === "session" && r.session === identity.session);
+      rec = existing ?? (policy.writable
+        ? openSession(cfg, { session: identity.session, agent: identity.agent, job: identity.job })
+        : rec);
+    }
   } catch (error) {
     journalControl = ["", `JOURNAL CONTROL unavailable: ${instructionValue(error instanceof Error ? error.message : String(error))}`];
   }
@@ -238,25 +246,28 @@ export async function prepareSessionStart(
     assignedWorkInstructions(cfg, rec.session, cli, rec.agent),
     readDue(cfg).then((r) => formatDue(r, cli, scope)).catch(() => []),
   ]);
-  const canonical = [agentInstructions(rec.session, cli, rec.agent), ...journalControl, ...work, ...due].join("\n");
+  const notice = lifecyclePersistenceNotice(policy);
+  const canonical = [agentInstructions(rec.session, cli, rec.agent), ...(notice ? ["", notice] : []), ...journalControl, ...work, ...due].join("\n");
   return composeHookText(canonical, readHookText(cfg, event), { session: rec.session, agent: rec.agent, cli, scope });
 }
 
-export function recordLifecycleToolResult(cfg: Config, payload: unknown, context: ActivityContext): void {
+export function recordLifecycleToolResult(cfg: Config, payload: unknown, context: ActivityContext, policy: ProjectWritePolicy): void {
+  if (!policy.writable) return;
   try { recordActivity(cfg, "PostToolUse", payload, context); } catch { /* telemetry is non-authoritative */ }
   try { recordHookReads(cfg, payload, new Date().toISOString(), context); } catch { /* telemetry is non-authoritative */ }
 }
 
-export async function recordMainSettlement(cfg: Config, session: string): Promise<void> {
+export async function recordMainSettlement(cfg: Config, session: string, policy: ProjectWritePolicy): Promise<void> {
+  if (!policy.writable) return;
   const { recordCalibrationSample } = await import("./calibration.ts");
   await recordCalibrationSample(cfg, session);
 }
 
-export async function prepareChildSettlement(cfg: Config, session: string): Promise<string> {
+export async function prepareChildSettlement(cfg: Config, session: string, policy: ProjectWritePolicy): Promise<string> {
   const [{ analyzeChange, formatSignal }, { recordCalibrationSample }] = await Promise.all([
     import("./signal.ts"), import("./calibration.ts"),
   ]);
-  await recordCalibrationSample(cfg, session).catch(() => null);
+  if (policy.writable) await recordCalibrationSample(cfg, session).catch(() => null);
   const change: StopChangeFeedback = await analyzeChange(cfg).then((s) => ({
     kind: "available" as const, text: formatSignal(s).join("\n"),
   })).catch((e: unknown) => ({
@@ -280,6 +291,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
   const sessionScope = p.session_id ?? p.sessionId;
   const hostScope = agentScope ?? sessionScope;
   const host = hookHost();
+  const policy = projectWritePolicy(cfg);
 
   const identity: LifecycleIdentity = {
     session: String(hostScope ?? process.env.COHERENCE_SESSION ?? newSessionId()),
@@ -288,13 +300,13 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     host, transport: hookTransport(), bundleHash: process.env.COHERENCE_HOOK_BUNDLE_FINGERPRINT ?? null,
   };
 
-  if (event !== "PostToolUse") {
+  if (event !== "PostToolUse" && policy.writable) {
     try { recordActivity(cfg, event, payload, lifecycleContext(identity)); }
     catch { /* observation loss must not become agent-lifecycle failure */ }
   }
 
   if (event === "SubagentStart" || event === "SessionStart") {
-    const text = await prepareSessionStart(cfg, event, identity);
+    const text = await prepareSessionStart(cfg, event, identity, policy);
     if (text) emit(identity.host, event, text);
     return 0;
   }
@@ -303,7 +315,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
   // and no attempt to reverse-engineer shell command strings. These transient rows are
   // what `calibrate` later compares with economy's predicted closure.
   if (event === "PostToolUse") {
-    recordLifecycleToolResult(cfg, payload, lifecycleContext(identity));
+    recordLifecycleToolResult(cfg, payload, lifecycleContext(identity), policy);
     // Deliberately dependency-light: with nothing declared on disk this is two stat
     // calls and out. The project voice is the only reason this event ever speaks.
     emitProjectVoice(cfg, host, event, hostScope);
@@ -321,7 +333,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     // its report. The one exception is a project-declared voice — an explicit project
     // choice, and one that still sits behind the stop_hook_active loop guard above.
     const session = String(hostScope ?? process.env.COHERENCE_SESSION ?? "unknown");
-    await recordMainSettlement(cfg, session).catch(() => null);
+    await recordMainSettlement(cfg, session, policy).catch(() => null);
     emitProjectVoice(cfg, host, event, session);
     return 0;
   }
@@ -336,7 +348,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     // child calibration and names the attribution ceiling in the report.
     const childSession = typeof agentScope === "string" && agentScope.length ? agentScope : null;
     const feedback = childSession
-      ? await prepareChildSettlement(cfg, childSession)
+      ? await prepareChildSettlement(cfg, childSession, policy)
       : composeStopFeedback(event, stopReport(cfg, childSession), await import("./signal.ts").then(async ({ analyzeChange, formatSignal }) => ({
         kind: "available" as const,
         text: formatSignal(await analyzeChange(cfg)).join("\n"),

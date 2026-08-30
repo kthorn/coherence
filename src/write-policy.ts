@@ -93,5 +93,5 @@ export function writeRefusal(policy: ProjectWritePolicy, operation: string): str
 
 export function lifecyclePersistenceNotice(policy: ProjectWritePolicy): string | null {
   if (policy.writable) return null;
-  return "COHERENCE PERSISTENCE unavailable: read-only guidance remains active and no evidence will be recorded in this checkout.";
+  return "COHERENCE PERSISTENCE unavailable: read-only guidance remains active and no evidence will be recorded in this checkout. Run from a registered linked worktree.";
 }
