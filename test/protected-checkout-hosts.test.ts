@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
-import { readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,7 +15,7 @@ async function filesUnder(root: string): Promise<string[]> {
   const result: string[] = [];
   async function visit(dir: string): Promise<void> {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
-      if (entry.name === ".git" || entry.name === ".coherence") continue;
+      if (entry.name === ".git") continue;
       const path = join(dir, entry.name);
       if (entry.isDirectory()) await visit(path);
       else result.push(relative(root, path));
@@ -27,6 +27,8 @@ async function filesUnder(root: string): Promise<string[]> {
 
 async function fixture(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "coherence-protected-hosts-"));
+  await mkdir(join(root, ".coherence"), { recursive: true });
+  await writeFile(join(root, ".coherence", "collector-sentinel"), "baseline\n");
   await writeFile(join(root, "coherence.config.json"), '{"protectPrimaryCheckout":true}\n');
   await run("git", ["init", "-q"], { cwd: root });
   await run("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
@@ -56,6 +58,7 @@ async function runProtectedLifecycle(host: HookHost): Promise<string[]> {
   const root = await fixture();
   try {
     const baseline = await filesUnder(root);
+    assert.ok(baseline.includes(".coherence/collector-sentinel"), "snapshot must include .coherence artifacts");
     if (host === "pi") await runProtectedPi(root);
     else {
       const env = { ...process.env, COHERENCE_PROJECT_ROOT: root, COHERENCE_HOOK_HOST: host, COHERENCE_SESSION: `${host}-cross-host` };
