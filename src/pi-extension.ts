@@ -81,28 +81,28 @@ export default function registerPiHooks(pi: Pick<ExtensionAPI, "on" | "events" |
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
-    if (!config || !identity) return;
+    if (!config || !identity || !policy) return;
     try {
-      const systemPrompt = await prepareSessionStart(config, childProcess ? "SubagentStart" : "SessionStart", identity, policy!);
+      const systemPrompt = await prepareSessionStart(config, childProcess ? "SubagentStart" : "SessionStart", identity, policy);
       return { systemPrompt: `${event.systemPrompt}\n${systemPrompt}` };
     } catch (error) { warning(ctx, error); return undefined; }
   });
 
   pi.on("tool_result", async (event, _ctx) => {
-    if (!config || !identity) return undefined;
-    recordLifecycleToolResult(config, toolPayload(event, identity), { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null }, policy!);
+    if (!config || !identity || !policy) return undefined;
+    recordLifecycleToolResult(config, toolPayload(event, identity), { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null }, policy);
     return undefined;
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
-    if (!config || !identity) return;
-    try { if (policy!.writable) recordActivity(config, childProcess ? "SubagentStop" : "Stop", { session_id: identity.session, ...(childProcess ? { agent_id: identity.session } : {}) }, { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null }); }
+    if (!config || !identity || !policy) return;
+    try { if (policy.writable) recordActivity(config, childProcess ? "SubagentStop" : "Stop", { session_id: identity.session, ...(childProcess ? { agent_id: identity.session } : {}) }, { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null }); }
     catch { /* activity loss never suppresses settlement */ }
     try {
-      if (!childProcess) await recordMainSettlement(config, identity.session, policy!);
+      if (!childProcess) await recordMainSettlement(config, identity.session, policy);
       else if (!childFeedbackSent) {
         childFeedbackSent = true;
-        const feedback = await prepareChildSettlement(config, identity.session, policy!);
+        const feedback = await prepareChildSettlement(config, identity.session, policy);
         pi.sendMessage({ customType: "coherence-subagent-stop", content: feedback, display: true }, { deliverAs: "followUp", triggerTurn: true });
       }
     } catch (error) { warning(ctx, error); }

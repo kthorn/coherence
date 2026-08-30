@@ -49,7 +49,8 @@ export interface PlatformAdapter {
   bindings(root: string, files?: readonly string[]): Promise<Bindings | null>;
 }
 
-export type HookHost = "claude" | "codex" | "pi";
+export const HOOK_HOSTS = ["claude", "codex", "pi"] as const;
+export type HookHost = typeof HOOK_HOSTS[number];
 export type ExternalHookHost = Exclude<HookHost, "pi">;
 
 export interface Config {
