@@ -44,7 +44,7 @@ test("protected primary refuses explicit writes before dispatch but permits read
   try {
     const rejected = await run(root, ["decide", "choice", "--because", "evidence", "--session", "s"]);
     assert.equal(rejected.code, 2);
-    assert.match(rejected.stderr, /protected-primary/);
+    assert.match(rejected.stderr, /protected primary checkout/);
     assert.equal(existsSync(join(root, ".coherence", "decisions")), false);
 
     const read = await run(root, ["decisions"]);

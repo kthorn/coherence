@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-30 18:51Z",
+  "generatedAt": "2026-08-30 19:26Z",
   "root": "coherence",
   "absRoot": "/home/kthorn/coherence/.worktrees/protected-primary-checkout",
   "nodes": [
@@ -8383,7 +8383,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/write-policy.ts",
-      "line": 35
+      "line": 82
     },
     {
       "id": "s:src/write-policy.ts#projectWritePolicy",
@@ -8392,7 +8392,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/write-policy.ts",
-      "line": 76
+      "line": 128
     },
     {
       "id": "s:src/write-policy.ts#writeRefusal",
@@ -8401,7 +8401,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/write-policy.ts",
-      "line": 86
+      "line": 138
     },
     {
       "id": "s:src/write-policy.ts#lifecyclePersistenceNotice",
@@ -8410,7 +8410,7 @@
       "kind": "symbol",
       "sub": "function",
       "path": "src/write-policy.ts",
-      "line": 94
+      "line": 147
     },
     {
       "id": "f:test/_helpers.ts",
@@ -14314,12 +14314,6 @@
       "kind": "imports"
     },
     {
-      "id": "f:test/protected-checkout-hosts.test.ts->x:node:util:imports",
-      "source": "f:test/protected-checkout-hosts.test.ts",
-      "target": "x:node:util",
-      "kind": "imports"
-    },
-    {
       "id": "f:test/protected-checkout-hosts.test.ts->x:node:os:imports",
       "source": "f:test/protected-checkout-hosts.test.ts",
       "target": "x:node:os",
@@ -14335,6 +14329,18 @@
       "id": "f:test/protected-checkout-hosts.test.ts->x:node:test:imports",
       "source": "f:test/protected-checkout-hosts.test.ts",
       "target": "x:node:test",
+      "kind": "imports"
+    },
+    {
+      "id": "f:test/protected-checkout-hosts.test.ts->x:node:util:imports",
+      "source": "f:test/protected-checkout-hosts.test.ts",
+      "target": "x:node:util",
+      "kind": "imports"
+    },
+    {
+      "id": "f:test/protected-checkout-hosts.test.ts->x:node:url:imports",
+      "source": "f:test/protected-checkout-hosts.test.ts",
+      "target": "x:node:url",
       "kind": "imports"
     },
     {

@@ -23,12 +23,21 @@ async function repository(): Promise<string> {
 
 test("write policy protects Git's primary checkout and permits its linked worktree", async () => {
   const primary = await repository();
+  const linked = join(dirname(primary), "linked");
+  const unusual = join(dirname(primary), "linked with embedded\nnewline and trailing space ");
   try {
-    const linked = join(dirname(primary), "linked");
     git(primary, "worktree", "add", "-q", "-b", "feature", linked);
-    assert.equal(projectWritePolicy(cfg(primary, true)).state, "protected-primary");
+    git(primary, "worktree", "add", "-q", "-b", "unusual", unusual);
+    const protectedPolicy = projectWritePolicy(cfg(primary, true));
+    assert.equal(protectedPolicy.state, "protected-primary");
+    assert.match(lifecyclePersistenceNotice(protectedPolicy)!, /protectPrimaryCheckout.*Git's primary checkout/);
     assert.equal(projectWritePolicy(cfg(linked, true)).state, "linked");
-  } finally { await rm(primary, { recursive: true, force: true }); await rm(join(dirname(primary), "linked"), { recursive: true, force: true }); }
+    assert.equal(projectWritePolicy(cfg(unusual, true)).state, "linked");
+  } finally {
+    await rm(primary, { recursive: true, force: true });
+    await rm(linked, { recursive: true, force: true });
+    await rm(unusual, { recursive: true, force: true });
+  }
 });
 
 test("write policy keeps existing projects writable by default", async () => {
@@ -47,9 +56,21 @@ test("write policy refuses when protected checkout identity is unprovable", asyn
     const policy = projectWritePolicy(cfg(root, true));
     assert.equal(policy.state, "unprovable");
     assert.equal(policy.writable, false);
+    assert.match(writeRefusal(policy, "decision append")!.join("\n"), /safe Git checkout identity could not be established/);
     assert.match(writeRefusal(policy, "decision append")!.join("\n"), /registered linked worktree/);
     assert.match(lifecyclePersistenceNotice(policy)!, /^COHERENCE PERSISTENCE unavailable:/);
+    assert.match(lifecyclePersistenceNotice(policy)!, /safe checkout identity could not be established/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("write refusal uses human wording and quotes terminal-control paths", () => {
+  const refusal = writeRefusal({
+    state: "protected-primary", writable: false,
+    identity: { kind: "primary", topLevel: "/tmp/control\u001b[31m" },
+  }, "coherence decide")!.join("\n");
+  assert.match(refusal, /protected primary checkout/);
+  assert.match(refusal, /"\/tmp\/control\\u001b\[31m"/);
+  assert.doesNotMatch(refusal, /\u001b/);
 });
 
 test("classifier accepts nested and canonical-equivalent roots", async () => {
@@ -74,6 +95,27 @@ test("a real submodule is classified as its own primary checkout", async () => {
   } finally {
     await rm(parent, { recursive: true, force: true });
     await rm(child, { recursive: true, force: true });
+  }
+});
+
+test("classifier preserves NUL-delimited worktree path bytes", async () => {
+  const root = await repository();
+  const unusual = join(dirname(root), "linked with embedded\nnewline and trailing space ");
+  try {
+    await mkdir(unusual);
+    const nulRunner: GitRunner = (args) => args[0] === "rev-parse"
+      ? `${unusual}\n`
+      : `worktree ${root}\0HEAD primary\0\0worktree ${unusual}\0HEAD linked\0\0`;
+    const lineRunner: GitRunner = (args) => {
+      if (args[0] === "rev-parse") return `${unusual}\n`;
+      if (args.includes("-z")) throw new Error("older Git");
+      return `worktree ${root}\nHEAD primary\n\nworktree ${JSON.stringify(unusual)}\nHEAD linked\n\n`;
+    };
+    assert.deepEqual(classifyGitCheckout(unusual, nulRunner), { kind: "linked", topLevel: unusual });
+    assert.deepEqual(classifyGitCheckout(unusual, lineRunner), { kind: "linked", topLevel: unusual });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(unusual, { recursive: true, force: true });
   }
 });
 

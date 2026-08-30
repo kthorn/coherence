@@ -311,13 +311,13 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     return 0;
   }
 
-  // The CHEAP tick: collect only explicit file paths. No graph build, no git worktree,
-  // and no attempt to reverse-engineer shell command strings. These transient rows are
-  // what `calibrate` later compares with economy's predicted closure.
+  // The CHEAP tick: collect only explicit file paths. No graph build and no attempt to
+  // reverse-engineer shell command strings. An opted-in protected-checkout policy pays
+  // one Git identity reading before this branch; projects using the default policy do not.
   if (event === "PostToolUse") {
     recordLifecycleToolResult(cfg, payload, lifecycleContext(identity), policy);
-    // Deliberately dependency-light: with nothing declared on disk this is two stat
-    // calls and out. The project voice is the only reason this event ever speaks.
+    // Deliberately dependency-light: the default policy reaches only the two project-voice
+    // stat calls. Opted-in checkout protection adds its Git identity reading first.
     emitProjectVoice(cfg, host, event, hostScope);
     return 0;
   }
@@ -369,8 +369,8 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
 }
 
 /** Events with no canonical emission still honor a declared project voice. Kept out of
- *  the hot branches so PostToolUse pays two stat calls, not a token build, when the
- *  project has declared nothing. */
+ *  the hot branches so the default-policy PostToolUse pays two stat calls, not a token
+ *  build; opted-in checkout protection separately pays its Git identity reading. */
 function emitProjectVoice(cfg: Config, host: ActivityHost, event: string, sessionScope: unknown): void {
   const custom = readHookText(cfg, event as LifecycleHookEvent);
   if (custom.override === null && custom.append === null) return;
