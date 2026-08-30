@@ -863,6 +863,29 @@ project-local dependency; no global installation is assumed.
    the tip as agents write. Leave it open while a fleet runs and you are reading your
    agents' reasoning at the moment it happens instead of reconstructing it afterward.
 
+#### Protected primary checkout
+
+A repository that reserves Git's primary checkout as a clean, sync-only copy can opt in:
+
+```json
+{
+  "protectPrimaryCheckout": true
+}
+```
+
+Git's first `worktree list --porcelain` entry is then protected. Registered linked
+worktrees remain writable regardless of branch name. In the primary checkout—or when
+Git cannot prove the checkout identity—an explicit Coherence mutation exits nonzero
+before writing. Startup instructions remain available, but lifecycle activity, tool
+telemetry, read traces, and calibration are suppressed across Claude, Codex, and Pi.
+Because those durable event rows are intentionally absent, protected execution cannot
+manufacture current-session activation evidence: structural control may be present while
+activation remains unobserved.
+
+There is no force flag, environment override, fallback redirection, or automatic cleanup.
+Move to a registered linked worktree to write; decide explicitly whether any records that
+predate adoption should be retained, migrated, or removed.
+
 `npx coherence hooks print --host codex` (or `--host claude`) renders that host's canonical
 settings, launcher, and mapping; `--host pi` renders Pi's native package, root mapping, and
 target. It is not the preferred installer. Coherence-owned control paths are repaired by
@@ -1011,6 +1034,7 @@ defaults come from `src/config.ts`):
 | `claudeProjectRoot` | `"."` | Path from the coherence root to the Claude project root whose `.claude/settings.json` owns lifecycle hooks. Set `".."` when coherence/package.json lives in a sub-project but Claude opens at the repository root. The installed launcher remains identical; `.claude/coherence-root` carries the relative address back. |
 | `codexProjectRoot` | `claudeProjectRoot`, then `"."` | Path from the coherence root to the Codex project root whose `.codex/hooks.json` owns lifecycle hooks. In a Git checkout this must resolve to `git rev-parse --show-toplevel`, because the canonical launcher is found from that root. The Codex and Claude controls remain independent even when their roots coincide. |
 | `piProjectRoot` | `"."` | Path from the coherence root to the Pi project root whose `.pi/settings.json` owns the native extension package entry and `.pi/coherence-root` mapping. Pi's native transport remains distinct from Claude/Codex launchers. |
+| `protectPrimaryCheckout` | `false` | When true, only a registered linked Git worktree may mutate through Coherence. The primary checkout and unprovable identities refuse explicit writes while lifecycle startup remains read-only; there is no force flag, environment override, redirection, or automatic cleanup. |
 | `dictionary` | `"dictionary"` | Dir (relative to the coherence root) holding the pattern dictionary — one `<Word>.md` per word. A `conforms to <Word>` claim expands the word's commitments against the declaring component. A project with no such dir simply has no words (see "The dictionary" below). |
 | `sources` | `[entryDir]` | Dirs the `lint-sinks`/`conventions` scans are scoped to — keep generated/vendored trees out. |
 | `testDir` | `"__tests__"` | Path substring identifying test files for the ratchet scans. |
