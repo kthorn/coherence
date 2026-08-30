@@ -122,9 +122,21 @@ export interface Command {
   writesBaseline?: true;
 }
 
+export const VALUED_FLAGS = new Set([
+  "--since", "--apply", "--over", "--because", "--agent", "--job", "--file", "--for", "--session", "--branch",
+  "--could-be", "--discriminated-by", "--as", "--evidence", "--value", "--baseline", "--threshold", "--unit", "--why",
+  "--raise-cap", "--symbol", "--outcome", "--host", "--context", "--action", "--success", "--hypothesis", "--action-result",
+  "--result", "--work", "--subject", "--authority", "--scope-component", "--scope-file", "--scope-symbol", "--environment",
+  "--max-bytes", "--risk", "--granted-by", "--boundary", "--owner-session", "--owner-agent", "--parent", "--depends-on",
+  "--read-scope", "--write-scope", "--constraint", "--non-goal", "--state", "--expected-previous", "--synthesized", "--id",
+]);
+export function commandPositionals(argv: readonly string[]): string[] {
+  return argv.filter((arg, i) => !arg.startsWith("--") && !VALUED_FLAGS.has(argv[i - 1] ?? ""));
+}
+const action = (argv: readonly string[]): string | undefined => commandPositionals(argv)[0];
 const checkable = (argv: readonly string[]): CommandEffect => argv.includes("--check") ? "read" : "write";
-const experimentEffect = (argv: readonly string[]): CommandEffect => !argv[0] || argv[0] === "inspect" ? "read" : "write";
-const actionWrite = (argv: readonly string[]): CommandEffect => !argv[0] || argv[0] === "inspect" || argv[0] === "status" ? "read" : "write";
+const experimentEffect = (argv: readonly string[]): CommandEffect => !action(argv) || action(argv) === "inspect" ? "read" : "write";
+const actionWrite = (argv: readonly string[]): CommandEffect => !action(argv) || action(argv) === "inspect" || action(argv) === "status" ? "read" : "write";
 const updateBaseline = (argv: readonly string[]): CommandEffect => argv.includes("--update-baseline") ? "write" : "read";
 const raiseWrite = (argv: readonly string[]): CommandEffect => argv.includes("--raise") ? "write" : "read";
 
@@ -226,7 +238,7 @@ export const COMMANDS: Command[] = [
   },
   {
     name: "consequence", group: "journal", usage: "<add|inspect> ... [--json]",
-    effect: argv => argv[0] === "add" ? "write" : "read",
+    effect: argv => action(argv) === "add" ? "write" : "read",
     summary: "explicit assessed links across durable records; add requires an exact session",
   },
 
@@ -302,7 +314,7 @@ export const COMMANDS: Command[] = [
   { name: "phrasebook", group: "reference", summary: "print the claim-form table straight from the `CLAIM_FORMS` registry", effect: "read" },
   {
     name: "hooks", group: "reference",
-    effect: argv => argv.includes("--check") ? "read" : (argv[0] === "install" || argv[0] === "uninstall" ? "write" : "read"),
+    effect: argv => argv.includes("--check") ? "read" : (action(argv) === "install" || action(argv) === "uninstall" ? "write" : "read"),
     usage: "[status|install|uninstall|print|review] [--check] [--json] [--host <claude|codex|pi>] [--session <id>]",
     summary: "the lifecycle control — converge on one canonical, runnable shared hook bundle",
   },

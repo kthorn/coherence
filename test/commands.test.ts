@@ -79,6 +79,10 @@ test("mixed commands classify their mutating modes", () => {
   assert.equal(commandEffect("hooks", ["install"]), "write");
   assert.equal(commandEffect("atlas", ["--check"]), "read");
   assert.equal(commandEffect("atlas", ["--check", "--raise"]), "write");
+  assert.equal(commandEffect("experiment", ["--json", "inspect"]), "read");
+  assert.equal(commandEffect("work", ["--json", "create", "objective"]), "write");
+  assert.equal(commandEffect("consequence", ["--json", "add"]), "write");
+  assert.equal(commandEffect("hooks", ["--json", "install"]), "write");
 });
 
 test("the AST scanner actually reads the dispatch (an oracle that scans nothing passes vacuously)", async () => {
