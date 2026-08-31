@@ -37,6 +37,7 @@ import {
 import { readTraceDetailed, recordHookReads } from "./read-trace.ts";
 import { readExperiments } from "./experiment.ts";
 import type { Config } from "./types.ts";
+import { lifecyclePersistenceNotice, projectWritePolicy, type ProjectWritePolicy } from "./write-policy.ts";
 
 /** Use the source entrypoint only while this repository dogfoods itself. Consumers get
  * the installed binary. Keeping this choice here also means the injected command is the
@@ -62,92 +63,50 @@ export function agentInstructions(session: string, cli = "npx coherence", agent?
   const scope = `--session ${JSON.stringify(session)}${agent ? ` --agent ${JSON.stringify(agent)}` : ""}`;
   const shownSession = instructionValue(session);
   return [
-    "DECISION JOURNAL — this repo keeps one, and you are expected to write to it.",
+    "DECISION JOURNAL — Record durable decisions, observed defects, and work boundaries.",
+    "Do not journal temporary probes, command failures, or mechanical edits.",
     "",
-    "When you make a decision — a point where the work could have gone more than one",
-    "way and you picked — record it BEFORE moving on:",
+    `YOUR SESSION ID IS ${shownSession}. Pass it on every call — it keeps records attributable`,
+    "when several agents are working at once.",
     "",
-    `  ${cli} decide "<what you chose>" --over "<what you rejected>" --because "<why>" ${scope}`,
-    "",
-    `YOUR SESSION ID IS ${shownSession}. Pass it on every call — it is what keeps your`,
-    "decisions attributable to you when four other agents are writing at the same time.",
-    "",
-    "SWARM GYROSCOPE — read the durable field before acting:",
+    "COORDINATION — Before dispatching, handing off, or sharing a worktree, read durable state:",
     `  ${cli} orient`,
     `  ${cli} work inspect`,
     "",
-    "`orient` selects one heading from strict evidence; it does not grant authority.",
-    "Only an orchestrator or explicitly authorized coordinator creates or hands off work.",
-    "Freeze objective, observable success, risk, authority, owner, dependencies, and scope",
-    "before dispatch; add parent/dependency/read/write flags when the boundary grants them:",
+    "`orient` selects a heading; it does not grant authority. Only an orchestrator or explicitly",
+    "authorized coordinator creates or hands off work. Create a work record only for delegated,",
+    "multi-writer, or cross-session work:",
     `  ${cli} work create "OBJECTIVE" --success "OBSERVABLE_RESULT" --risk high \\`,
     `    --authority orchestrator-delegated --granted-by "ORCHESTRATOR" \\`,
     `    --boundary "GRANTED_SCOPE" ${scope}`,
-    "Owners advance only the exact assignment printed by SessionStart. Re-inspect after",
-    "each mutation because predecessor tokens deliberately expire instead of last-writer-win.",
+    "A prescribed runbook with its own durable state does not need a second work or experiment",
+    "record unless it creates a durable decision, defect, or handoff.",
+    "After a work lifecycle write, re-inspect that work; other entries do not need a fleet refresh.",
     `Navigate explicit provenance with: ${cli} consequence inspect "work:WORK_ID"`,
     "",
-    "`--over` is repeatable and it is the field that matters most: what you REJECTED is",
-    "what stops the next agent re-litigating a settled question. If you rejected nothing,",
-    "omit it — an unexamined choice and a forced one should not look alike.",
+    "Record a durable decision when it settles behavior, risk, architecture, or a rejected alternative:",
+    `  ${cli} decide "<what you chose>" --over "<what you rejected>" --because "<why>" ${scope}`,
     "",
-    "WHEN A NUMBER SURPRISES YOU, DOUBT THE INSTRUMENT BEFORE THE SUBJECT — and record",
-    "the question even if you cannot chase it. An unresolved conjecture is a real entry:",
-    "",
+    "WHEN A NUMBER SURPRISES YOU, DOUBT THE INSTRUMENT BEFORE THE SUBJECT. Record a conjecture",
+    "only when its result could change current work:",
     `  ${cli} conjecture "<the surprising observation>" --could-be "<explanation>" \\`,
     `    --discriminated-by "<the test that would separate them>" ${scope}`,
     `  ${cli} resolved <id> --because "<what that test showed>" --as "<which candidate won>" ${scope}`,
     `  ${cli} dismiss <id> --because "<why it is not worth chasing>" ${scope}`,
     "",
-    'You need not supply "the instrument is wrong" — it is added for you. It is the',
-    "highest-prior explanation for a surprising measurement and the one everyone skips.",
-    "",
-    "WHEN YOU OBSERVE A DEFECT, RECORD IT BEFORE THE REPAIR ERASES THE EVIDENCE:",
-    "",
+    "WHEN YOU OBSERVE A DEFECT with a reproducer or field evidence, record it before repair:",
     `  ${cli} defect "<what failed>" --evidence "<the reproducer, output, or field report>" ${scope}`,
+    "This is an assessed conclusion, not machine proof; if the defect is uncertain, use conjecture instead.",
+    "Attach each affected path with --file. Redact credentials, tokens, personal data, and customer data.",
     "",
-    "This is your assessed conclusion, not machine proof. If whether it is a defect is",
-    "still an open question, use conjecture instead. Attach each affected path with --file.",
-    "Redact credentials, tokens, personal data, and customer data: this record is committed.",
-    "",
-    "`dismiss` is NOT `resolved`. Use it when the question is real and nobody intends to",
-    "answer it — it renders in its own section, saying exactly that, and it stops the",
-    "advisories re-raising the same finding. Answering something you did not answer is the",
-    "one thing this journal cannot recover from.",
-    "",
-    "BEFORE YOU ADD A CONCEPT, COUNT ITS INSTANCES. A mechanism with no subjects in this",
-    "project is a FINDING, not a feature — and the finding is usually a subtraction that",
-    "does the same work. Record what you measured, what you would have built, and the",
-    "QUERY that decided it, because the answer is a function of the project and will change:",
-    "",
-    `  ${cli} decide "not X — measured N instances" --over "<the mechanism you did not build>" \\`,
-    `    --because "<the query, so the next agent can re-run it instead of re-arguing>" ${scope}`,
-    "",
-    "WHEN YOU FIX A BUG, DECIDE WHAT HAPPENS TO ITS CLASS — dissolve > declare > infer.",
-    "Best: make the class UNREPRESENTABLE — remove the duplicated state, narrow the type,",
-    "collapse the second spelling of the domain that let two copies disagree. Next: PIN it —",
-    "an invariant anchored by a boundary whose guard goes red if the class returns, plus a",
-    "`## refutations` line recording what you actually observed broken; a fixed bug is a",
-    "measured negative control, and it is evidence only if it is written down. A spot fix",
-    "is the floor, not the fix — if the stronger rungs were out of reach, say why:",
-    "",
-    `  ${cli} decide "spot-fixed <bug>; class survives" --over "dissolving <the state that allows it>" \\`,
-    `    --because "<why unrepresentable/pinned was not reachable today>" ${scope}`,
-    "",
-    "WHEN YOU FORM A MULTI-STEP PLAN, MAKE ITS PREDICTION FALSIFIABLE before acting:",
+    "For a multi-step plan whose next decision depends on empirical evidence, make the prediction falsifiable:",
     `  ${cli} experiment create "<what you expect will work>" --context "<file you expect to need>" \\`,
     `    --action "<planned action>" --success "<observable success criterion>" ${scope}`,
-    "The command prints stable action/criterion ids and a close template. Closing derives",
-    "success, failure, or inconclusive from evidence for EVERY id; a Stop or a checked box",
-    "never becomes success by itself.",
-    "",
-    "Two more verbs:",
+    "Use `blocked` only for work that cannot proceed; use `retract` for a refuted record:",
     `  ${cli} blocked "<what you could not do>" --because "<why>" ${scope}`,
     `  ${cli} retract <id> --because "<what refuted it>" ${scope}`,
     "",
-    "This gates nothing. It cannot fail your build and it is not a checklist — log the",
-    "handful of choices a reader who never saw your transcript would need, not every step.",
-    "A job that logs three real decisions is worth more than one that logs thirty steps.",
+    "This does not gate a build. Log the handful of facts a later reader needs, not every step.",
   ].join("\n");
 }
 
@@ -263,14 +222,21 @@ export async function prepareSessionStart(
   cfg: Config,
   event: "SessionStart" | "SubagentStart",
   identity: LifecycleIdentity,
+  policy: ProjectWritePolicy,
 ): Promise<string> {
   let rec = { session: identity.session, agent: identity.agent };
   let journalControl: string[] = [];
   try {
     const trusted = readTrustedJournal(cfg);
-    if (!trusted.ok) throw new Error(`${trusted.damage.length} decision journal damage item(s)`);
-    rec = trusted.records.find((r) => r.kind === "session" && r.session === identity.session)
-      ?? openSession(cfg, { session: identity.session, agent: identity.agent, job: identity.job });
+    if (!trusted.ok) {
+      if (policy.writable) throw new Error(`${trusted.damage.length} decision journal damage item(s)`);
+      journalControl = ["", `JOURNAL CONTROL unavailable: ${trusted.damage.length} decision journal damage item(s)`];
+    } else {
+      const existing = trusted.records.find((r) => r.kind === "session" && r.session === identity.session);
+      rec = existing ?? (policy.writable
+        ? openSession(cfg, { session: identity.session, agent: identity.agent, job: identity.job })
+        : rec);
+    }
   } catch (error) {
     journalControl = ["", `JOURNAL CONTROL unavailable: ${instructionValue(error instanceof Error ? error.message : String(error))}`];
   }
@@ -280,25 +246,28 @@ export async function prepareSessionStart(
     assignedWorkInstructions(cfg, rec.session, cli, rec.agent),
     readDue(cfg).then((r) => formatDue(r, cli, scope)).catch(() => []),
   ]);
-  const canonical = [agentInstructions(rec.session, cli, rec.agent), ...journalControl, ...work, ...due].join("\n");
+  const notice = lifecyclePersistenceNotice(policy);
+  const canonical = [agentInstructions(rec.session, cli, rec.agent), ...(notice ? ["", notice] : []), ...journalControl, ...work, ...due].join("\n");
   return composeHookText(canonical, readHookText(cfg, event), { session: rec.session, agent: rec.agent, cli, scope });
 }
 
-export function recordLifecycleToolResult(cfg: Config, payload: unknown, context: ActivityContext): void {
+export function recordLifecycleToolResult(cfg: Config, payload: unknown, context: ActivityContext, policy: ProjectWritePolicy): void {
+  if (!policy.writable) return;
   try { recordActivity(cfg, "PostToolUse", payload, context); } catch { /* telemetry is non-authoritative */ }
   try { recordHookReads(cfg, payload, new Date().toISOString(), context); } catch { /* telemetry is non-authoritative */ }
 }
 
-export async function recordMainSettlement(cfg: Config, session: string): Promise<void> {
+export async function recordMainSettlement(cfg: Config, session: string, policy: ProjectWritePolicy): Promise<void> {
+  if (!policy.writable) return;
   const { recordCalibrationSample } = await import("./calibration.ts");
   await recordCalibrationSample(cfg, session);
 }
 
-export async function prepareChildSettlement(cfg: Config, session: string): Promise<string> {
+export async function prepareChildSettlement(cfg: Config, session: string, policy: ProjectWritePolicy): Promise<string> {
   const [{ analyzeChange, formatSignal }, { recordCalibrationSample }] = await Promise.all([
     import("./signal.ts"), import("./calibration.ts"),
   ]);
-  await recordCalibrationSample(cfg, session).catch(() => null);
+  if (policy.writable) await recordCalibrationSample(cfg, session).catch(() => null);
   const change: StopChangeFeedback = await analyzeChange(cfg).then((s) => ({
     kind: "available" as const, text: formatSignal(s).join("\n"),
   })).catch((e: unknown) => ({
@@ -322,6 +291,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
   const sessionScope = p.session_id ?? p.sessionId;
   const hostScope = agentScope ?? sessionScope;
   const host = hookHost();
+  const policy = projectWritePolicy(cfg);
 
   const identity: LifecycleIdentity = {
     session: String(hostScope ?? process.env.COHERENCE_SESSION ?? newSessionId()),
@@ -330,24 +300,24 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     host, transport: hookTransport(), bundleHash: process.env.COHERENCE_HOOK_BUNDLE_FINGERPRINT ?? null,
   };
 
-  if (event !== "PostToolUse") {
+  if (event !== "PostToolUse" && policy.writable) {
     try { recordActivity(cfg, event, payload, lifecycleContext(identity)); }
     catch { /* observation loss must not become agent-lifecycle failure */ }
   }
 
   if (event === "SubagentStart" || event === "SessionStart") {
-    const text = await prepareSessionStart(cfg, event, identity);
+    const text = await prepareSessionStart(cfg, event, identity, policy);
     if (text) emit(identity.host, event, text);
     return 0;
   }
 
-  // The CHEAP tick: collect only explicit file paths. No graph build, no git worktree,
-  // and no attempt to reverse-engineer shell command strings. These transient rows are
-  // what `calibrate` later compares with economy's predicted closure.
+  // The CHEAP tick: collect only explicit file paths. No graph build and no attempt to
+  // reverse-engineer shell command strings. An opted-in protected-checkout policy pays
+  // one Git identity reading before this branch; projects using the default policy do not.
   if (event === "PostToolUse") {
-    recordLifecycleToolResult(cfg, payload, lifecycleContext(identity));
-    // Deliberately dependency-light: with nothing declared on disk this is two stat
-    // calls and out. The project voice is the only reason this event ever speaks.
+    recordLifecycleToolResult(cfg, payload, lifecycleContext(identity), policy);
+    // Deliberately dependency-light: the default policy reaches only the two project-voice
+    // stat calls. Opted-in checkout protection adds its Git identity reading first.
     emitProjectVoice(cfg, host, event, hostScope);
     return 0;
   }
@@ -363,7 +333,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     // its report. The one exception is a project-declared voice — an explicit project
     // choice, and one that still sits behind the stop_hook_active loop guard above.
     const session = String(hostScope ?? process.env.COHERENCE_SESSION ?? "unknown");
-    await recordMainSettlement(cfg, session).catch(() => null);
+    await recordMainSettlement(cfg, session, policy).catch(() => null);
     emitProjectVoice(cfg, host, event, session);
     return 0;
   }
@@ -378,7 +348,7 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
     // child calibration and names the attribution ceiling in the report.
     const childSession = typeof agentScope === "string" && agentScope.length ? agentScope : null;
     const feedback = childSession
-      ? await prepareChildSettlement(cfg, childSession)
+      ? await prepareChildSettlement(cfg, childSession, policy)
       : composeStopFeedback(event, stopReport(cfg, childSession), await import("./signal.ts").then(async ({ analyzeChange, formatSignal }) => ({
         kind: "available" as const,
         text: formatSignal(await analyzeChange(cfg)).join("\n"),
@@ -399,8 +369,8 @@ export async function runHook(cfg: Config, event: string): Promise<number> {
 }
 
 /** Events with no canonical emission still honor a declared project voice. Kept out of
- *  the hot branches so PostToolUse pays two stat calls, not a token build, when the
- *  project has declared nothing. */
+ *  the hot branches so the default-policy PostToolUse pays two stat calls, not a token
+ *  build; opted-in checkout protection separately pays its Git identity reading. */
 function emitProjectVoice(cfg: Config, host: ActivityHost, event: string, sessionScope: unknown): void {
   const custom = readHookText(cfg, event as LifecycleHookEvent);
   if (custom.override === null && custom.append === null) return;
