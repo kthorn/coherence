@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 import { loadConfig } from "./config.ts";
+import { projectWritePolicy, type ProjectWritePolicy } from "./write-policy.ts";
 import { recordActivity } from "./activity.ts";
 import { newSessionId } from "./decisions.ts";
 import { PI_HOOK_BUNDLE_FINGERPRINT, resolvePiRuntimeRoot } from "./pi-control.ts";
@@ -42,6 +43,7 @@ function toolPayload(event: ToolResultEvent, identity: LifecycleIdentity): Recor
 export default function registerPiHooks(pi: Pick<ExtensionAPI, "on" | "events" | "sendMessage">): void {
   let config: Config | null = null;
   let identity: LifecycleIdentity | null = null;
+  let policy: ProjectWritePolicy | null = null;
   let childProcess = false;
   let childFeedbackSent = false;
   const fallbackSession = newSessionId();
@@ -51,6 +53,7 @@ export default function registerPiHooks(pi: Pick<ExtensionAPI, "on" | "events" |
   pi.on("session_start", async (_event, ctx) => {
     config = null;
     identity = null;
+    policy = null;
     childProcess = false;
     childFeedbackSent = false;
     try {
@@ -59,6 +62,7 @@ export default function registerPiHooks(pi: Pick<ExtensionAPI, "on" | "events" |
       const loaded = await loadConfig(selected.root);
       if (!loaded.declared) return;
       config = loaded;
+      policy = projectWritePolicy(config);
       const session = ctx.sessionManager.getSessionId()?.trim() || fallbackSession;
       childProcess = process.env.PI_SUBAGENT_CHILD === "1";
       identity = {
@@ -69,36 +73,36 @@ export default function registerPiHooks(pi: Pick<ExtensionAPI, "on" | "events" |
       };
       childFeedbackSent = false;
       const event = childProcess ? "SubagentStart" : "SessionStart";
-      try { recordActivity(config, event, { session_id: session, ...(childProcess ? { agent_id: session } : {}) }, {
+      try { if (policy!.writable) recordActivity(config, event, { session_id: session, ...(childProcess ? { agent_id: session } : {}) }, {
         host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null,
       }); } catch { /* activity loss never suppresses startup */ }
-      await prepareSessionStart(config, event, identity);
+      await prepareSessionStart(config, event, identity, policy!);
     } catch (error) { warning(ctx, error); }
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
-    if (!config || !identity) return;
+    if (!config || !identity || !policy) return;
     try {
-      const systemPrompt = await prepareSessionStart(config, childProcess ? "SubagentStart" : "SessionStart", identity);
+      const systemPrompt = await prepareSessionStart(config, childProcess ? "SubagentStart" : "SessionStart", identity, policy);
       return { systemPrompt: `${event.systemPrompt}\n${systemPrompt}` };
     } catch (error) { warning(ctx, error); return undefined; }
   });
 
   pi.on("tool_result", async (event, _ctx) => {
-    if (!config || !identity) return undefined;
-    recordLifecycleToolResult(config, toolPayload(event, identity), { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null });
+    if (!config || !identity || !policy) return undefined;
+    recordLifecycleToolResult(config, toolPayload(event, identity), { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null }, policy);
     return undefined;
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
-    if (!config || !identity) return;
-    try { recordActivity(config, childProcess ? "SubagentStop" : "Stop", { session_id: identity.session, ...(childProcess ? { agent_id: identity.session } : {}) }, { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null }); }
+    if (!config || !identity || !policy) return;
+    try { if (policy.writable) recordActivity(config, childProcess ? "SubagentStop" : "Stop", { session_id: identity.session, ...(childProcess ? { agent_id: identity.session } : {}) }, { host: "pi", transport: "native", bundleHash: PI_HOOK_BUNDLE_FINGERPRINT, experimentId: null }); }
     catch { /* activity loss never suppresses settlement */ }
     try {
-      if (!childProcess) await recordMainSettlement(config, identity.session);
+      if (!childProcess) await recordMainSettlement(config, identity.session, policy);
       else if (!childFeedbackSent) {
         childFeedbackSent = true;
-        const feedback = await prepareChildSettlement(config, identity.session);
+        const feedback = await prepareChildSettlement(config, identity.session, policy);
         pi.sendMessage({ customType: "coherence-subagent-stop", content: feedback, display: true }, { deliverAs: "followUp", triggerTurn: true });
       }
     } catch (error) { warning(ctx, error); }

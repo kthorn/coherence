@@ -12,12 +12,12 @@ import type {
   AgentSettledEvent, BeforeAgentStartEvent, ExtensionAPI, SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 
-async function fixture() {
+async function fixture(protectPrimaryCheckout = false) {
   const root = await mkdtemp(join(tmpdir(), "coherence-pi-"));
   const extension = join(process.cwd(), "src/pi-extension.ts");
   await mkdir(join(root, ".pi"), { recursive: true });
   await writeFile(join(root, "package.json"), JSON.stringify({ name: PI_EXTENSION_ID, pi: { extensions: [relative(root, extension)] } }));
-  await writeFile(join(root, "coherence.config.json"), "{}\n");
+  await writeFile(join(root, "coherence.config.json"), JSON.stringify(protectPrimaryCheckout ? { protectPrimaryCheckout: true } : {}) + "\n");
   await writeFile(join(root, ".pi", "settings.json"), JSON.stringify({ packages: [".."] }));
   await writeFile(join(root, ".pi", "coherence-root"), "./\n");
   return root;
@@ -69,6 +69,30 @@ function fakePi(root: string, sessionId?: string) {
     async fire<K extends FakeEventName>(name: K, event: FakeEvents[K]): Promise<FakeResult> { return handlers.get(name)?.(event, ctx); },
   };
 }
+
+test("Pi extension — protected primary stays read-only for startup, tools, and child settlement", { concurrency: false }, async () => {
+  const root = await fixture(true);
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  execFileSync("git", ["config", "user.email", "test@example.invalid"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  execFileSync("git", ["add", "."], { cwd: root });
+  execFileSync("git", ["commit", "-qm", "baseline"], { cwd: root });
+  const runtime = fakePi(root, "pi-protected-child");
+  const old = { ...process.env };
+  process.env.PI_SUBAGENT_CHILD = "1";
+  try {
+    registerPiHooks(runtime.pi);
+    await runtime.fire("session_start", { type: "session_start", reason: "startup" });
+    const started = await runtime.fire("before_agent_start", { type: "before_agent_start", systemPrompt: "base", prompt: "work" });
+    assert.ok(started);
+    assert.match(started.systemPrompt, /COHERENCE PERSISTENCE unavailable/);
+    await runtime.fire("tool_result", { type: "tool_result", toolCallId: "write", toolName: "write", input: { file_path: "x" }, content: [], isError: false, details: undefined });
+    await runtime.fire("agent_settled", { type: "agent_settled" });
+    await runtime.fire("agent_settled", { type: "agent_settled" });
+    assert.equal(runtime.sent.length, 1);
+    assert.equal((await import("node:fs")).existsSync(join(root, ".coherence")), false);
+  } finally { process.env = old; await rm(root, { recursive: true, force: true }); }
+});
 
 test("Pi extension — main settlement stays silent and child settlement triggers exactly one final report without pi-subagents", { concurrency: false }, async () => {
   const root = await fixture();

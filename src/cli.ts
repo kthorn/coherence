@@ -15,7 +15,7 @@ import { buildGraph } from "./derive.ts";
 import { renderOutline } from "./render-outline.ts";
 import { renderOverview } from "./render-overview.ts";
 import { renderClaude, spliceBlock, extractBlock, resolveClaudeMdPath, CLAUDE_BEGIN, CLAUDE_END } from "./render-claude.ts";
-import { renderCommandsBlock, renderPhrasebookBlock, usageBanner, commandFor, COMMANDS_BEGIN, COMMANDS_END, PHRASEBOOK_BEGIN, PHRASEBOOK_END } from "./commands.ts";
+import { renderCommandsBlock, renderPhrasebookBlock, usageBanner, commandFor, commandEffect, commandPositionals, COMMANDS_BEGIN, COMMANDS_END, PHRASEBOOK_BEGIN, PHRASEBOOK_END } from "./commands.ts";
 import { runVerify, applyVerdicts } from "./verify.ts";
 import { decompose } from "./decompose.ts";
 import { drift } from "./drift.ts";
@@ -67,6 +67,7 @@ import {
   recordConsequence, renderConsequences, type ConsequenceRelation,
 } from "./consequence.ts";
 import { observeOrientation, renderOrientation } from "./orient.ts";
+import { projectWritePolicy, writeRefusal } from "./write-policy.ts";
 
 const cmd = process.argv[2];
 const argv = process.argv.slice(3);
@@ -81,16 +82,9 @@ const since = sinceIdx >= 0 ? argv[sinceIdx + 1] : null;
 // a better record than one with a comma-joined string nobody can split reliably.
 // `--could-be` is repeatable for the same reason as `--over`, and for one more: the
 // count of candidates IS the signal. One candidate is a hunch dressed as an inquiry.
-const VALUED = new Set(["--since", "--apply", "--over", "--because", "--agent", "--job", "--file", "--for", "--session", "--branch",
-  "--could-be", "--discriminated-by", "--as",
-  "--evidence",
-  "--value", "--baseline", "--threshold", "--unit", "--why", "--raise-cap", "--symbol", "--outcome", "--host",
-  "--context", "--action", "--success", "--hypothesis", "--action-result", "--result",
-  "--work", "--subject", "--authority", "--scope-component", "--scope-file", "--scope-symbol", "--environment",
-  "--max-bytes", "--risk", "--granted-by", "--boundary", "--owner-session", "--owner-agent", "--parent", "--depends-on", "--read-scope", "--write-scope", "--constraint", "--non-goal", "--state", "--expected-previous", "--synthesized", "--id"]);
 const many = (flag: string): string[] => argv.reduce<string[]>((acc, a, i) => (a === flag && argv[i + 1] !== undefined ? [...acc, argv[i + 1]] : acc), []);
 const one = (flag: string): string | null => { const v = many(flag); return v.length ? v[v.length - 1] : null; };
-const positional = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1] ?? ""));
+const positional = commandPositionals(argv);
 export function repeatedSingletonFlags(
   args: string[],
   allowed: Iterable<string>,
@@ -140,6 +134,11 @@ process.on("uncaughtException", renderUnrunnable);
 process.on("unhandledRejection", renderUnrunnable);
 
 const cfg = await loadConfig(process.cwd());
+const effect = commandEffect(cmd, argv);
+if (effect === "write" && cmd !== "hook") {
+  const refusal = writeRefusal(projectWritePolicy(cfg), `coherence ${cmd}`);
+  if (refusal) { for (const line of refusal) console.error(line); await exit(2); }
+}
 const stamp = new Date().toISOString().slice(0, 16).replace("T", " ") + "Z";
 const out = (p: string) => join(cfg.root, cfg.outputDir, p);
 const normStamp = (s: string) => s.replace(/<span id="stamp">[^<]*<\/span>/, '<span id="stamp"></span>');
