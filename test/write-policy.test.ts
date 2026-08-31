@@ -63,14 +63,28 @@ test("write policy refuses when protected checkout identity is unprovable", asyn
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("write refusal uses human wording and quotes terminal-control paths", () => {
-  const refusal = writeRefusal({
-    state: "protected-primary", writable: false,
-    identity: { kind: "primary", topLevel: "/tmp/control\u001b[31m" },
-  }, "coherence decide")!.join("\n");
-  assert.match(refusal, /protected primary checkout/);
-  assert.match(refusal, /"\/tmp\/control\\u001b\[31m"/);
-  assert.doesNotMatch(refusal, /\u001b/);
+test("operator output quotes paths and neutralizes every terminal-control range", () => {
+  const policy = {
+    state: "protected-primary" as const, writable: false,
+    identity: { kind: "primary" as const, topLevel: "/tmp/control\u001b[31m\u007f\u009b" },
+  };
+  const lines = [...writeRefusal(policy, "coherence decide")!, lifecyclePersistenceNotice(policy)!];
+  const output = lines.join("\n");
+  assert.match(output, /protected primary checkout/);
+  assert.match(output, /"\/tmp\/control\\u001b\[31m\\u007f\\u009b"/);
+  for (const line of lines) assert.doesNotMatch(line, /[\x00-\x1f\x7f-\x9f]/);
+});
+
+test("unprovable operator output names an available terminal-safe Git top-level", () => {
+  const policy = {
+    state: "unprovable" as const, writable: false,
+    identity: { kind: "unknown" as const, topLevel: "/tmp/resolved\u009b", reason: "registration mismatch" },
+  };
+  const lines = [...writeRefusal(policy, "coherence decide")!, lifecyclePersistenceNotice(policy)!];
+  const output = lines.join("\n");
+  assert.match(output, /safe (?:Git )?checkout identity could not be established/);
+  assert.match(output, /at "\/tmp\/resolved\\u009b"/);
+  for (const line of lines) assert.doesNotMatch(line, /[\x00-\x1f\x7f-\x9f]/);
 });
 
 test("classifier accepts nested and canonical-equivalent roots", async () => {

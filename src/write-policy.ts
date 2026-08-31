@@ -135,19 +135,25 @@ export function projectWritePolicy(cfg: Pick<Config, "root" | "protectPrimaryChe
   return { state: "unprovable", writable: false, identity };
 }
 
+function displayedPath(path: string): string {
+  return JSON.stringify(path).replace(/[\x7f-\x9f]/g, (char) =>
+    `\\u${char.codePointAt(0)!.toString(16).padStart(4, "0")}`);
+}
+
 export function writeRefusal(policy: ProjectWritePolicy, operation: string): string[] | null {
   if (policy.writable) return null;
-  const location = policy.identity.topLevel ? ` at ${JSON.stringify(policy.identity.topLevel)}` : "";
+  const location = policy.identity.topLevel ? ` at ${displayedPath(policy.identity.topLevel)}` : "";
   const reason = policy.state === "protected-primary"
     ? `protectPrimaryCheckout is active for the protected primary checkout${location}`
-    : "protectPrimaryCheckout is active, but safe Git checkout identity could not be established";
+    : `protectPrimaryCheckout is active, but safe Git checkout identity could not be established${location}`;
   return [`Cannot ${operation}: ${reason}.`, "Run from a registered linked worktree."];
 }
 
 export function lifecyclePersistenceNotice(policy: ProjectWritePolicy): string | null {
   if (policy.writable) return null;
+  const location = policy.identity.topLevel ? ` at ${displayedPath(policy.identity.topLevel)}` : "";
   const identity = policy.state === "protected-primary"
-    ? `protectPrimaryCheckout is active for Git's primary checkout${policy.identity.topLevel ? ` at ${JSON.stringify(policy.identity.topLevel)}` : ""}`
-    : "protectPrimaryCheckout is active, but safe checkout identity could not be established";
+    ? `protectPrimaryCheckout is active for Git's primary checkout${location}`
+    : `protectPrimaryCheckout is active, but safe checkout identity could not be established${location}`;
   return `COHERENCE PERSISTENCE unavailable: ${identity}. Read-only guidance remains active and no evidence will be recorded in this checkout. Run from a registered linked worktree.`;
 }
