@@ -216,7 +216,7 @@ test("pytest batch — nodeid names resolve per claim, zero matches is the vanis
       testBatchFormat: "pytest-json",
     }), g, {}));
     assert.equal(r.code, 1);
-    assert.match(r.out, /oracles: batched — running the whole suite ONCE/);
+    assert.match(r.out, /oracles: batched — full — running batch ONCE/);
     assert.match(r.out, /report parsed \(pytest-json\), 13 test\(s\)/);
     assert.match(r.out, /claims: 3 · 1 green · 2 red/);
     const failLine = r.out.split("\n").find((l) => l.includes('"test_totality"'))!;

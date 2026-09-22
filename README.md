@@ -1805,7 +1805,22 @@ their original content-addressed ids before adapting anything, and normalizes th
 `owner-session` spelling in memory to `none` or `legacy-unscoped` where the frozen rows
 prove only that weaker scope. It never rewrites the append-only bytes.
 
-### `coherence defect` — record observed damage before the repair erases it
+### `coherence defect` — optional structured investigation evidence
+
+Journaling is optional durable memory, not a task checklist. Follow repository policy:
+record a decision only when future work needs its rationale and it is not already
+adequately recorded. Routine edits, debugging, plans, and command failures need no entry;
+a session with no journal entries is legitimate. Prefer regression tests and component
+contracts for recurrence prevention, issues for unresolved defects, and PR evidence for
+repairs. Use structured defect records when explicitly required or when a concrete
+investigation or automation will consume them. Conjecture and experiment records are
+likewise available tools, not requirements triggered by routine work or having a plan.
+Explicit authorized coordination obligations remain unchanged.
+
+Existing history, manual commands and their integrity checks remain intact. Automatic
+session headers, activity/read telemetry, and calibration are separate lifecycle
+mechanisms, not removed by this guidance. Updating the package does not rewrite instructions
+already injected into running sessions; restart/reload the host with the updated control.
 
 A conjecture preserves a question. A defect record preserves the stronger conclusion an
 agent reached when behavior violated an expectation, together with the evidence that made
@@ -3055,8 +3070,20 @@ passes.) Both were measured on Node 25.2.1.
 - **`--fast` stays runner-free** — executable outcomes still skip, but Vitest-backed claims
   pay the small source-derived existence floor above. A project with no test-backed claims
   never builds the index.
-- **Scoped runs still batch the whole suite once** and resolve only the in-scope claims from
-  it. One boot is already cheaper than even three scoped per-claim boots.
+- **Scoped runs pass their selected component directories to the batch process** as
+  `COHERENCE_COMPONENT_SCOPE`, a JSON array of sorted, deduplicated repository-relative
+  POSIX directories (`.` for the root). A scope-aware adapter can run just those
+  components' oracles; other runners may ignore it and still run the whole suite.
+  Full verification removes any inherited scope value from the child environment.
+  Scope is transient command input, not a product switch. Selection remains Coherence's
+  responsibility; adapters must not guess it from their own Git diff.
+- **Batch output distinguishes requested scope from observed outcomes.** Verification
+  prints passed, failed, and other (skipped/unknown) report counts plus batch wall time,
+  including elapsed time before a failed batch's loud serial fallback. An adapter may
+  emit one bounded stdout line, `coherence-batch-summary: N requested Python oracles`
+  (N is 1–15 decimal digits), to distinguish node selectors from parameterized cases.
+  Only that diagnostic line is forwarded, and only with a usable report; it never
+  supplies verdict evidence. Arbitrary runner output is not forwarded as a summary.
 - The `responds` probes and the **meta-oracle** are untouched — neither is runner-based.
 
 #### What it does NOT do

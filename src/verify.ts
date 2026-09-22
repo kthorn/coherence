@@ -346,8 +346,8 @@ export async function runVerify(cfg: Config, graph: Graph, opts: VerifyOpts): Pr
   // `typecheck` above: the suite runs at most once per verify, and only if some executable
   // claim actually asks. So `--fast` (whole executable tier skipped) and a project with no
   // test-backed claims never pay for it, and configuring the feature cannot slow anything
-  // down. A SCOPED run (--staged/--since) still runs the batch WHOLE and resolves only the
-  // in-scope claims from it — one boot is already cheaper than three scoped per-claim boots.
+  // down. Scoped runs pass their component directories to the batch process; runners
+  // that understand COHERENCE_COMPONENT_SCOPE can avoid unrelated tests.
   //
   // The mode is decided ONCE, up front (selectOracleMode), and the serial per-claim profile
   // is not reachable without naming it. Resolution itself stays LAZY and memoized, exactly
@@ -405,8 +405,21 @@ export async function runVerify(cfg: Config, graph: Graph, opts: VerifyOpts): Pr
       console.log(`oracles: reading an existing report — ${mode.file} (running no tests)`);
       access = engage(readReportFile(root, mode.file, batchFormat), `--from-report ${mode.file}`);
     } else if (mode.kind === "batch") {
-      console.log(`oracles: batched — running the whole suite ONCE${mode.derived ? " (command derived from config.test)" : ""}: ${mode.cmd.join(" ")}`);
-      access = engage(runTestBatch(mode.cmd, root, batchFormat), "the batch run");
+      const scope = opts.only ? comps.map((c) => c.id.slice(2)).sort() : undefined;
+      console.log(`oracles: batched — ${scope ? `scoped to ${scope.join(", ")}` : "full"} — running batch ONCE${mode.derived ? " (command derived from config.test)" : ""}: ${mode.cmd.join(" ")}`);
+      const started = performance.now();
+      const outcome = runTestBatch(mode.cmd, root, batchFormat, scope);
+      const elapsed = Math.round(performance.now() - started);
+      if (outcome.report) {
+        const tests = outcome.report.tests;
+        const passed = tests.filter((t) => t.status === "passed").length;
+        const failed = tests.filter((t) => ["failed", "error", "xpassed"].includes(t.status)).length;
+        if (outcome.summary) console.log(outcome.summary);
+        console.log(`oracles: batch outcomes — ${passed} passed, ${failed} failed, ${tests.length - passed - failed} other (skipped/unknown); elapsed ${elapsed}ms`);
+      } else {
+        console.log(`oracles: batch incomplete; elapsed ${elapsed}ms`);
+      }
+      access = engage(outcome, "the batch run");
     } else if (mode.kind === "serial") {
       access = grantSerial(mode.why);
     } else {

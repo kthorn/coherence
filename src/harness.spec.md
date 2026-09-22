@@ -8,6 +8,8 @@ rendering, and journaling remain independently addressable modules beneath this 
 
 ## invariants
 
+- a scoped batch receives selected component directories while a full batch clears inherited scope
+
 - agent lifecycle preserves decisions and exposes the current change signal
 - significant behavioral growth acquires an anchor or patch-specific decision
 - a weaker regulation obligation never masks a stronger one
@@ -123,6 +125,8 @@ rendering, and journaling remain independently addressable modules beneath this 
 
 ## works when
 
+- boundary "a scoped batch receives selected component directories while a full batch clears inherited scope" at runTestBatch via guard "verify — scoped batches receive exact component directories and full batches scrub inherited scope"
+
 - typechecks
 - cli.ts imports ./config.ts
 - cli.ts imports ./derive.ts
@@ -201,6 +205,10 @@ rendering, and journaling remain independently addressable modules beneath this 
 - boundary "a streamed journal entry renders exactly once across appends and compaction" at tailJournal via guard "tail — an appended record arrives exactly once, a compaction fold re-emits nothing and drops nothing, and a half-written line waits for its bytes"
 
 ## why
+
+**a scoped batch receives selected component directories while a full batch clears inherited scope.** Selection belongs to the verifier, not a second Git-diff implementation in every runner. The environment handoff lets a repository adapter avoid unrelated oracles without changing arbitrary batch-command arguments. Explicitly clearing inherited scope prevents a nested full verification from accidentally narrowing its evidence. The subprocess regression crosses the actual environment boundary; report matching still independently decides every verdict.
+
+Journaling guidance treats durable memory as optional and follows repository policy rather than duplicating tests, issues, and PR evidence. No-entry sessions are legitimate. This is an agent-facing instruction contract reviewed as prose, not a claim that an oracle can prove a model's compliance. Existing history, manual journal operations, exact coordination authority, and lifecycle telemetry are unchanged.
 
 **agent lifecycle preserves decisions and exposes the current change signal.** Decisions
 and risk are cheapest to surface while the agent still holds the context that produced
