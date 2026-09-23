@@ -30,6 +30,9 @@ jobs:
       - name: Smoke-test the packed artifact in a fresh consumer
         run: node scripts/package-smoke.mjs
         timeout-minutes: 5
+      - name: Smoke-test Git preparation without a native compiler
+        run: node scripts/package-smoke.mjs --git
+        timeout-minutes: 5
       - name: Check per-change read signaling
         env:
           PR_BASE: ${{ github.event.pull_request.base.sha }}

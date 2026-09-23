@@ -11,7 +11,7 @@ import { buildGraph } from "../src/derive.ts";
 import { makeTreeSitterAdapter, ruby } from "../src/adapters/tree-sitter.ts";
 
 const HARNESS = join(dirname(fileURLToPath(import.meta.url)), "..");
-const RUBY_WASM = join(HARNESS, "node_modules", "tree-sitter-ruby", "tree-sitter-ruby.wasm");
+const RUBY_WASM = join(HARNESS, "grammars", "tree-sitter-ruby.wasm");
 
 const RUBY_SRC = `# frozen_string_literal: true
 # Renders order status badges.

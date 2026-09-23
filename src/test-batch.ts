@@ -44,7 +44,7 @@ export interface BatchTest { fullName: string; status: string; file?: string; du
 export interface BatchReport { format: TestBatchFormat; tests: BatchTest[] }
 
 /** A batch attempt: the report, or null with the reason the run must fall back. */
-export interface BatchOutcome { report: BatchReport | null; note: string }
+export interface BatchOutcome { report: BatchReport | null; note: string; summary?: string }
 
 /** What the executable tier is allowed to do this run. `serialAllowed: false` with a null
  *  report is a REFUSAL — the claim skips rather than quietly taking the slow path. */
@@ -391,12 +391,15 @@ export function readReportFile(root: string, file: string, format: TestBatchForm
  * running (spawn error, timeout, signal) or a report that will not parse — never "some
  * test was red".
  */
-export function runTestBatch(cmd: string[], root: string, format: TestBatchFormat): BatchOutcome {
+export function runTestBatch(cmd: string[], root: string, format: TestBatchFormat, scope?: readonly string[]): BatchOutcome {
   if (!cmd.length) return { report: null, note: "the batch command is empty" };
+  const env = { ...process.env };
+  delete env.COHERENCE_COMPONENT_SCOPE;
+  if (scope !== undefined) env.COHERENCE_COMPONENT_SCOPE = JSON.stringify([...new Set(scope)].sort());
   // Taken BEFORE the spawn so the report file can be proved to postdate this run.
   const startedAt = Date.now();
   const r = spawnSync(cmd[0], cmd.slice(1), {
-    cwd: root, encoding: "utf8", timeout: BATCH_TIMEOUT_MS, maxBuffer: BATCH_MAX_BUFFER,
+    cwd: root, env, encoding: "utf8", timeout: BATCH_TIMEOUT_MS, maxBuffer: BATCH_MAX_BUFFER,
   });
   if (r.error) return { report: null, note: `the runner did not complete: ${(r.error as Error).message}` };
   if (r.status === null) return { report: null, note: `the runner was killed by signal ${r.signal ?? "unknown"}` };
@@ -428,7 +431,11 @@ export function runTestBatch(cmd: string[], root: string, format: TestBatchForma
     // The unknown case is already refused before we ever get here (resolveBatchFormat).
     const report = parseBatchReport(text, format);
     if (!report.tests.length) return { report: null, note: "the report parsed but contained no tests" };
-    return { report, note: `${report.tests.length} test(s)` };
+    // Only this bounded numeric diagnostic may cross from runner chatter to CLI output.
+    // It is never used to resolve claims; the parsed report alone supplies evidence.
+    const summary = (r.stdout || "").split(/\r?\n/).find((line) =>
+      /^coherence-batch-summary: [0-9]{1,15} requested Python oracles$/.test(line));
+    return { report, note: `${report.tests.length} test(s)`, summary };
   } catch (e) {
     return { report: null, note: `the report could not be parsed: ${(e as Error).message}` };
   }

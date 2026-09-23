@@ -7,11 +7,11 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { constants, existsSync } from "node:fs";
 import {
-  access, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile,
+  access, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -83,10 +83,26 @@ try {
   await mkdir(packedDir);
   await mkdir(join(consumer, "src"), { recursive: true });
 
-  run(npm, ["pack", "--pack-destination", packedDir], { cwd: packageRoot });
-  const tarballs = (await readdir(packedDir)).filter((name) => name.endsWith(".tgz"));
-  assert.equal(tarballs.length, 1, `npm pack produced ${tarballs.length} tarballs`);
-  const tarball = join(packedDir, tarballs[0]);
+  let dependency;
+  if (process.argv.includes("--git")) {
+    // Snapshot the current build inputs, including uncommitted fixes, but no dist or
+    // node_modules. A Git dependency must prepare itself on a compiler-less consumer.
+    const source = join(temporaryRoot, "source");
+    await mkdir(source);
+    for (const entry of ["package.json", "package-lock.json", "tsconfig.json", "src", "grammars", "README.md", "LICENSE"]) {
+      await cp(join(packageRoot, entry), join(source, entry), { recursive: true });
+    }
+    run(git, ["init", "-q"], { cwd: source });
+    run(git, ["add", "."], { cwd: source });
+    run(git, ["-c", "user.name=Package smoke", "-c", "user.email=smoke@invalid.example",
+      "-c", "commit.gpgsign=false", "commit", "-qm", "build inputs"], { cwd: source });
+    dependency = `git+${pathToFileURL(source).href}#${run(git, ["rev-parse", "HEAD"], { cwd: source }).stdout.trim()}`;
+  } else {
+    run(npm, ["pack", "--pack-destination", packedDir], { cwd: packageRoot });
+    const tarballs = (await readdir(packedDir)).filter((name) => name.endsWith(".tgz"));
+    assert.equal(tarballs.length, 1, `npm pack produced ${tarballs.length} tarballs`);
+    dependency = join(packedDir, tarballs[0]);
+  }
 
   await writeFile(join(consumer, "package.json"), `${JSON.stringify({
     name: "coherence-package-smoke-consumer",
@@ -101,7 +117,12 @@ try {
   run(git, ["init", "-q", "-b", "main"], { cwd: consumer });
   run(git, ["config", "user.name", "Coherence package smoke"], { cwd: consumer });
   run(git, ["config", "user.email", "package-smoke@invalid.example"], { cwd: consumer });
-  run(npm, ["install", "--no-audit", "--no-fund", tarball], { cwd: consumer });
+  run(npm, ["install", "--no-audit", "--no-fund", dependency], {
+    cwd: consumer,
+    timeout: 240_000,
+    env: { ...withoutHostSession(), CC: "false", CXX: "false", npm_config_build_from_source: "true",
+      npm_config_cache: join(temporaryRoot, "cache"), npm_config_ignore_scripts: "false" },
+  });
   run(git, ["add", "."], { cwd: consumer });
   run(git, ["commit", "-q", "-m", "fresh consumer"], { cwd: consumer });
   const consumerCommit = run(git, ["rev-parse", "HEAD"], { cwd: consumer }).stdout.trim();
@@ -117,6 +138,20 @@ try {
   const coherenceHook = join(consumer, "node_modules", ".bin", "coherence-hook");
   await executable(coherence);
   await executable(coherenceHook);
+  // Exercise the shipped grammars through the installed package, not node_modules
+  // grammar packages in the maintainer checkout.
+  run(process.execPath, ["--input-type=module", "-e", `
+    import assert from 'node:assert/strict';
+    import { BUILTIN_LANGUAGES } from ${JSON.stringify(pathToFileURL(join(installed, "dist/adapters/tree-sitter.js")).href)};
+    for (const [language, source] of Object.entries({
+      typescript: 'export function fixture() { return 1; }',
+      python: 'def fixture():\\n    return 1\\n',
+      ruby: 'def fixture\\n  1\\nend\\n',
+    })) {
+      const adapter = await BUILTIN_LANGUAGES[language]();
+      assert.ok(adapter.symbols(source).some(symbol => symbol.name.startsWith('fixture')), language);
+    }
+  `], { cwd: consumer });
 
   // Reject malformed evidence before the recorder creates even an empty ledger directory.
   run(coherence, ["defect", "invalid record", "--session", "invalid-session"], {
@@ -208,7 +243,7 @@ try {
   run(coherence, ["defects"], { cwd: consumer, status: 2 });
   run(coherence, ["defects", "--json"], { cwd: consumer, status: 2 });
 
-  console.log("package smoke: packed artifact passed in an isolated git consumer");
+  console.log(`package smoke: ${process.argv.includes("--git") ? "Git dependency without native compilation" : "packed artifact"} passed in an isolated git consumer`);
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
 }

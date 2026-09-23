@@ -257,7 +257,7 @@ test("verify — `passes test` claims resolve from ONE batch run, and the suite 
       cfg(root, { testBatch: ["node", join(root, "runner.js"), "--reporter=json"] }), g, {}));
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /4 green/);
-    assert.match(r.out, /oracles: batched — running the whole suite ONCE/);
+    assert.match(r.out, /oracles: batched — full — running batch ONCE/);
     assert.match(r.out, /report parsed \(vitest-json\), 8 test\(s\)/);
     // FOUR claims, ONE boot — the whole point of the feature.
     assert.equal((await readFile(join(root, "runs.log"), "utf8")).length, 1);
@@ -338,7 +338,7 @@ test("verify — --from-report consumes an outer gate's report and runs NO suite
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /2 green/);
     assert.match(r.out, /reading an existing report — outer-report\.json \(running no tests\)/);
-    assert.doesNotMatch(r.out, /running the whole suite/);
+    assert.doesNotMatch(r.out, /running batch/);
   });
 });
 
@@ -488,7 +488,67 @@ test("verify — a project with no executable claims never boots the batch eithe
   });
 });
 
-test("verify — a SCOPED run batches the whole suite once and resolves only in-scope claims", async () => {
+test("verify — scoped batches receive exact component directories and full batches scrub inherited scope", async () => {
+  const runner = `require("node:fs").writeFileSync("scope.json", JSON.stringify({
+    scope: process.env.COHERENCE_COMPONENT_SCOPE ?? null
+  }));\n` + batchRunner(VITEST_REPORT);
+  await withProject({ "runner.js": runner }, async (root) => {
+    process.env.RUNS_LOG = join(root, "runs.log");
+    const inherited = process.env.COHERENCE_COMPONENT_SCOPE;
+    process.env.COHERENCE_COMPONENT_SCOPE = '["wrong"]';
+    try {
+      const g = graph([
+        comp("a", { claims: ['passes test "outer inner nest deep"'], why: "r" }),
+        comp("a/nested", { claims: ['passes test "bare top level test"'], why: "r" }),
+        comp("b", { claims: ['passes test "failing group this one fails"'], why: "r" }),
+      ]);
+      const config = cfg(root, { testBatch: ["node", join(root, "runner.js")] });
+      const scoped = await runCaptured(() => runVerify(config, g, { only: new Set(["a/nested", "a"]) }));
+      assert.equal(scoped.code, 0, scoped.out);
+      assert.deepEqual(JSON.parse(JSON.parse(await readFile(join(root, "scope.json"), "utf8")).scope), ["a", "a/nested"]);
+      assert.match(scoped.out, /scoped.*a, a\/nested/);
+      const full = await runCaptured(() => runVerify(config, g, {}));
+      assert.equal(full.code, 1, full.out); // b's genuinely failing oracle is now in scope
+      assert.equal(JSON.parse(await readFile(join(root, "scope.json"), "utf8")).scope, null);
+      assert.equal(process.env.COHERENCE_COMPONENT_SCOPE, '["wrong"]');
+    } finally {
+      if (inherited === undefined) delete process.env.COHERENCE_COMPONENT_SCOPE;
+      else process.env.COHERENCE_COMPONENT_SCOPE = inherited;
+    }
+  });
+});
+
+test("verify — summary crosses the child boundary without forwarding arbitrary output or masking failure", async () => {
+  const runner = `console.log("private runner chatter");
+console.log("coherence-batch-summary: 2 requested Python oracles");
+console.log("coherence-batch-summary: 99 requested Python oracles extra");\n` + batchRunner(VITEST_REPORT);
+  await withProject({ "runner.js": runner }, async (root) => {
+    process.env.RUNS_LOG = join(root, "runs.log");
+    const g = graph([comp(".", { claims: ['passes test "failing group this one fails"'], why: "r" })]);
+    const r = await runCaptured(() => runVerify(cfg(root, {
+      testBatch: ["node", join(root, "runner.js"), "--outputFile=report.json"],
+    }), g, {}));
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /coherence-batch-summary: 2 requested Python oracles/);
+    assert.doesNotMatch(r.out, /private runner chatter|99 requested/);
+    assert.match(r.out, /6 passed, 1 failed, 1 other/);
+    assert.match(r.out, /elapsed \d+ms/);
+    assert.doesNotMatch(r.out, /FALLING BACK/);
+  });
+});
+
+test("verify — invalid reports do not forward successful adapter summaries", async () => {
+  await withProject({ "runner.js": 'console.log("coherence-batch-summary: 2 requested Python oracles");\n' + batchRunner("not a report") }, async (root) => {
+    process.env.RUNS_LOG = join(root, "runs.log");
+    const g = graph([comp(".", { claims: ['passes test "missing"'], why: "r" })]);
+    const r = await runCaptured(() => runVerify(cfg(root, { testBatch: ["node", join(root, "runner.js")] }), g, {}));
+    assert.match(r.out, /FALLING BACK/);
+    assert.match(r.out, /elapsed \d+ms/);
+    assert.doesNotMatch(r.out, /coherence-batch-summary/);
+  });
+});
+
+test("verify — a SCOPED run batches once and resolves only in-scope claims", async () => {
   await withProject({ "runner.js": batchRunner(VITEST_REPORT) }, async (root) => {
     process.env.RUNS_LOG = join(root, "runs.log");
     const g = graph([
