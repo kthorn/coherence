@@ -45,3 +45,23 @@ contract, protocol identity, host controls, or docs. Its claim therefore exercis
 real composition crossing and pins the maintenance trigger's named surfaces while proving
 that the reminder stays out of consumer canon. This is project policy carried by the
 project voice, not maintenance detail imposed on every adopter.
+
+## Installation contract
+
+Consumer Git installation builds the TypeScript CLI without requiring native C/C++
+grammar compilation. The runtime and adapter tests use committed WASM; native grammar
+packages are not normal install dependencies. The chokepoint is package dependency
+selection before npm's Git `prepare`. CI's `node scripts/package-smoke.mjs --git`
+exercises a fresh Git consumer with source builds forced and compiler commands disabled.
+This is an explicit CI oracle rather than a serial `verify` claim that would repeat a
+network installation for each verification. The grammar refresh command alone downloads
+exact pinned npm tarballs with lifecycle scripts disabled and extracts prebuilt WASM.
+
+## Seams
+
+- Git source → npm preparation → installed CLI: `package.json` build dependencies supply
+  the compiler-free consumer smoke; a package tarball is not an adequate substitute for
+  this crossing because Git preparation installs development dependencies too.
+- npm grammar tarballs → committed `grammars/`: the explicit refresh script owns exact
+  source versions; byte-identical refresh checks and real adapter tests validate the
+  shipped WASM without installing native Node bindings.

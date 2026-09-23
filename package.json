@@ -53,9 +53,6 @@
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.3",
     "@types/node": "^22.0.0",
-    "tree-sitter-python": "^0.25.0",
-    "tree-sitter-ruby": "^0.23.1",
-    "tree-sitter-typescript": "^0.23.2",
     "typescript": "^5.7.0"
   },
   "dependencies": {

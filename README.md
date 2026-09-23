@@ -1805,6 +1805,18 @@ their original content-addressed ids before adapting anything, and normalizes th
 `owner-session` spelling in memory to `none` or `legacy-unscoped` where the frozen rows
 prove only that weaker scope. It never rewrites the append-only bytes.
 
+### Compiler-free Git installation
+
+Git dependencies run npm `prepare`, including development-dependency installation.
+Native Tree-sitter grammar packages are intentionally not development dependencies:
+runtime and adapter tests use the WASM binaries already shipped in `grammars/`.
+To refresh them, update the exact package versions in `scripts/refresh-grammars.mjs`
+and run `node scripts/refresh-grammars.mjs`. It downloads npm tarballs without lifecycle
+scripts and extracts only the prebuilt WASM, using npm and tar rather than a compiler.
+Commit the binaries and provenance together. `node scripts/package-smoke.mjs --git`
+checks real Git preparation from current build inputs with native compilation forced
+and both C/C++ compiler commands disabled, then exercises the installed consumer.
+
 ### `coherence defect` — optional structured investigation evidence
 
 Journaling is optional durable memory, not a task checklist. Follow repository policy:
